@@ -1,15 +1,17 @@
-name: Build Full Throttle N64 r2p
+name: Build Full Throttle N64 r2o
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - ".github/workflows/build-full-throttle-r2p.yml"
+      - ".github/workflows/build-full-throttle-r2o.yml"
       - "backend/**"
       - "probe/**"
       - "scripts/**"
       - "docs/**"
       - "upstream/**"
+      - "README.md"
+      - "TERMUX.md"
       - ".gitattributes"
 
 permissions:
@@ -27,7 +29,9 @@ jobs:
       - name: Host prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y             build-essential bzip2 ca-certificates curl file git             libmpc-dev libmpfr-dev make python3 texinfo unzip wget zlib1g-dev
+          sudo apt-get install -y \
+            build-essential bzip2 ca-certificates curl file git \
+            libmpc-dev libmpfr-dev make python3 texinfo unzip wget zlib1g-dev
 
       - name: Preflight
         run: bash ./scripts/preflight.sh
@@ -40,7 +44,9 @@ jobs:
 
       - name: Install current prebuilt libdragon toolchain
         run: |
-          curl -fL --retry 5 --retry-all-errors             -o /tmp/gcc-toolchain-mips64-x86_64.deb             https://github.com/DragonMinded/libdragon/releases/download/toolchain-continuous-prerelease/gcc-toolchain-mips64-x86_64.deb
+          curl -fL --retry 5 --retry-all-errors \
+            -o /tmp/gcc-toolchain-mips64-x86_64.deb \
+            https://github.com/DragonMinded/libdragon/releases/download/toolchain-continuous-prerelease/gcc-toolchain-mips64-x86_64.deb
           sudo dpkg -i /tmp/gcc-toolchain-mips64-x86_64.deb
           export N64_INST=/opt/libdragon
           export PATH="$N64_INST/bin:$PATH"
@@ -51,7 +57,7 @@ jobs:
           cat artifacts/toolchain-version.txt
           bash ./scripts/build_libdragon.sh
 
-      - name: Integrate r2p backend
+      - name: Integrate r2o source and backend
         run: |
           mkdir -p artifacts
           set -o pipefail
@@ -77,22 +83,23 @@ jobs:
             echo
             echo "Artifact files:"
             find artifacts -type f -printf '%P %s bytes\n' | sort
-          } > artifacts/r2p-summary.txt
-
+          } > artifacts/r2o-summary.txt
           if [ -d work/scummvm/.git ]; then
-            git -C work/scummvm diff --check               > artifacts/scummvm-git-diff-check.txt 2>&1 || true
-            git -C work/scummvm status --short               > artifacts/scummvm-git-status.txt || true
+            git -C work/scummvm diff --check \
+              > artifacts/scummvm-git-diff-check.txt 2>&1 || true
+            git -C work/scummvm status --short \
+              > artifacts/scummvm-git-status.txt || true
           fi
-
           if [ -d work/libdragon/.git ]; then
-            git -C work/libdragon rev-parse HEAD               > artifacts/libdragon-commit.txt || true
+            git -C work/libdragon rev-parse HEAD \
+              > artifacts/libdragon-commit.txt || true
           fi
 
-      - name: Upload r2p ROMs and diagnostics
+      - name: Upload r2o ROMs and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: full-throttle-n64-r2p-build-report
+          name: full-throttle-n64-r2o-build-report
           path: artifacts/
           if-no-files-found: error
           retention-days: 30
@@ -102,5 +109,5 @@ jobs:
         run: |
           echo "Probe outcome: ${{ steps.probe.outcome }}"
           echo "ScummVM outcome: ${{ steps.scummvm.outcome }}"
-          echo "Both logs were preserved in the r2p build-report artifact."
+          echo "Both logs were preserved in the r2o build-report artifact."
           exit 1

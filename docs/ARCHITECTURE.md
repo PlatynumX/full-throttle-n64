@@ -1,4 +1,4 @@
-# r2p architecture
+# r2o architecture
 
 ## Runtime data path
 
@@ -21,37 +21,38 @@ No game-data payload is part of CI or the build artifact.
 ## Video presentation
 
 ScummVM renders its normal 8-bit CLUT game surface. The N64 backend retains the
-r2m second 16-bit converted surface, so ordinary presentation is bulk copy
-rather than a full palette conversion in every `updateScreen()`.
+r2m second 16-bit converted surface, so ordinary presentation is a bulk copy
+rather than a palette conversion for every pixel on every presentation.
 
-r2p additionally fixes fake-alpha overlay handling: `clearOverlay()` composes
-the current game frame into the overlay instead of leaving it black, and
-`hideOverlay()` immediately presents the game frame so an overlay transition
-does not depend on a later engine-driven redraw.
+The existing overlay transition correction is retained: `clearOverlay()`
+composes the current game frame into the fake-alpha overlay, and `hideOverlay()`
+immediately presents the game frame.
 
 ## SMUSH timing
 
-The SCUMM v7 engine starts from pinned ScummVM 1.6.0. A single consolidated
-source patch adds the later upstream Full Throttle file-dependent SMUSH
-frame-rate logic and removes the unused predictive-input GUI object required by
-this stripped build.
+The SCUMM v7 engine starts from pinned ScummVM 1.6.0. One consolidated source
+patch makes the smallest Full-Throttle-specific backport of upstream commit
+`9e7e6a08b276ebe5dfdbc79e9a9fc2edcfd12bf8` that fits the verified 1.6.0 class
+layout.
 
-The patch is applied once, only after `git apply --check` succeeds against the
-exact pinned checkout. No fallback source mutation exists.
+The backport reads the version and frame rate directly from the AHDR stream,
+tracks the existing INSANE SAN flags, and does not allocate a copy of the entire
+header. `git apply --check` must succeed against the exact pinned checkout before
+the patch is applied once.
 
 ## Input
 
-r2p retains the r2m libdragon Joypad/mouse path unchanged. Controls are not part
-of this runtime pass.
+r2o retains the r2m libdragon Joypad/mouse path unchanged.
 
 ## Audio/timers
 
-r2p does not change r2m audio configuration or timer servicing. Audio remains
-22050 Hz with three libdragon buffers. The ScummVM timer manager remains serviced
-from normal backend execution rather than interrupt context.
+r2o does not change the established audio configuration or timer servicing.
+Audio remains 22050 Hz with three libdragon buffers. The ScummVM timer manager is
+serviced from normal backend execution rather than interrupt context.
 
 ## Source policy
 
 Every CI build fetches the pinned ScummVM source and pinned libdragon revision
-from scratch. Platform changes live as clean backend files. The only ScummVM
-source mutation is the single checked Git patch in `upstream/`.
+from scratch. Platform code is installed as complete backend files. The only
+ScummVM source mutation is `upstream/scummvm-1.6.0-ft64.patch`, applied once
+after an exact `git apply --check`. No fallback rewrite exists.

@@ -1,85 +1,73 @@
-# Full Throttle N64 r2p
+# Full Throttle N64 r2o
 
 Full Throttle-only ScummVM 1.6.0 port for Nintendo 64, using libdragon and
 SummerCart SD storage.
 
 ## Hardware baseline
 
-r2m builds and runs on a real N64 with an Expansion Pak. Full Throttle launches
-from `sd:/fullthrottle/`, the opening SMUSH movie plays, and gameplay is reached.
-The latest hardware test reports two remaining runtime problems:
+r2m builds and runs on real N64 hardware with an Expansion Pak. Full Throttle
+launches from `sd:/fullthrottle/`, the opening SMUSH movie plays, and gameplay is
+reached. The r2m controller path and preconverted 16-bit presentation path are
+retained.
 
-1. SMUSH video is still choppy;
-2. leaving the initial gameplay screen can transition to a black screen.
+The next observed runtime targets were choppy SMUSH playback and a black
+transition when leaving the initial gameplay screen. The overlay transition
+correction already present in the current backend is retained unchanged in r2o.
 
-r2p changes only those two areas. Controls, SD filesystem behavior, save paths,
-audio configuration, and the r2m preconverted game framebuffer remain otherwise
-unchanged.
+## Why r2o replaces the r2n source patch
 
-## Black-screen transition fix
+The r2n SMUSH patch copied 2023 ScummVM source hunks whose class layout no longer
+matched the pinned 2013 ScummVM checkout. In particular, pinned
+`smush_player.h` is only 132 lines and does not contain the later public methods
+used as r2n hunk context. r2o does not add another patch on top.
 
-ScummVM's overlay contract says `clearOverlay()` must leave the game graphics
-visible while overlay mode is active. A backend without real alpha blending is
-expected to achieve that by copying the current game image into its overlay.
-The historical ScummVM N64 backend does exactly that.
+Instead, r2o replaces the consolidated patch with a minimal backport written
+against the verified pinned layout:
 
-r2m instead zeroed the entire overlay buffer, producing a black overlay.
+```text
+f75a652bb7c956f145abe881c87b5dbf5c9ec24b
+```
 
-r2p therefore:
-
-- rebuilds the converted game frame when necessary;
-- clears only the unused overlay area;
-- copies the current game frame into the overlay in ScummVM's N64 RGB555 layout;
-- marks the display dirty;
-- immediately presents the game frame when `hideOverlay()` is called, matching
-  the historical N64 backend's explicit protection for games that do not issue
-  another screen update when leaving an overlay;
-- emits USB/emulator debug messages for `showOverlay`, `clearOverlay`, and
-  `hideOverlay` so a remaining transition failure can be tied to the exact
-  runtime path instead of guessed at.
-
-## SMUSH timing backport
-
-ScummVM upstream commit:
+The behavior comes from upstream ScummVM commit:
 
 ```text
 9e7e6a08b276ebe5dfdbc79e9a9fc2edcfd12bf8
 SCUMM: INSANE/SMUSH: Implement video file dependent frame rate
 ```
 
-states that Full Throttle video files contain their correct frame rate in the
-FLU header and that using it fixes ScummVM bug #14029. ScummVM 2.7.0 release
-notes subsequently describe SMUSH timing fixes mostly affecting Full Throttle.
+For Full Throttle, r2o:
 
-The r2n failure exposed that the 2023 header hunk did not match ScummVM 1.6.0.
-r2p was rebuilt after inspecting the exact pinned 1.6.0 SMUSH and INSANE source.
-It adapts the upstream behavior to that verified class layout instead of copying
-a newer-source hunk. The already-required `gui/predictivedialog.o` removal and
-the adapted SMUSH changes remain **one consolidated Git patch**. There is no
-second patcher and no sed/regex fallback.
+- tracks the current INSANE SAN flags at the three existing 1.6.0 assignment
+  sites;
+- reads AHDR major/minor version and the encoded frame rate at offset
+  `6 + 0x300`;
+- applies the encoded non-zero rate when flag bit 3 is clear;
+- preserves palette handling when `_skipPalette` is active;
+- avoids the later upstream whole-header `malloc`, reading directly from the
+  existing stream instead, which is preferable on an 8 MiB N64 target;
+- leaves `insane.h` and `scumm.cpp` untouched because their later-source changes
+  are not needed for this Full-Throttle-only build.
 
-GitHub CI still enforces exact compatibility before compilation:
+The already-required `gui/predictivedialog.o` removal is in the same single Git
+patch. There is no fuzzy application, sed rewrite, second patcher, or fallback.
+
+## Verification
+
+CI fetches the exact pinned ScummVM checkout from scratch and runs:
 
 ```text
-git apply --check
+git apply --check upstream/scummvm-1.6.0-ft64.patch
+git apply upstream/scummvm-1.6.0-ft64.patch
 ```
 
-against exactly:
-
-```text
-f75a652bb7c956f145abe881c87b5dbf5c9ec24b
-```
-
-If any source context differs, integration stops before the compiler runs. The
-artifact preserves complete pristine copies of every file touched by the patch
-plus `integration.log`. There is deliberately no fuzzy fallback.
+exactly once. It then checks the resulting source, generated Make database,
+required Full Throttle objects, and `git diff --check` before compilation.
+Pristine and patched source neighborhoods are kept in the build-report artifact.
 
 ## Game data
 
 No Full Throttle game or demo data is downloaded, embedded, staged, or uploaded
-by this repository.
-
-The ROM expects the existing game data at:
+by this repository. The ROM expects existing data at:
 
 ```text
 sd:/fullthrottle/
@@ -96,11 +84,12 @@ sd:/fullthrottle/saves/
 GitHub Actions builds:
 
 ```text
-ft64-sd-probe.z64
-full-throttle-n64-r2p.z64
+ft64-sd-probe-r2o.z64
+full-throttle-n64-r2o.z64
 ```
 
-The build artifact contains ROMs and diagnostics only.
+The artifact is named `full-throttle-n64-r2o-build-report` and contains ROMs and
+diagnostics only.
 
-See `TERMUX.md` for the Android publish commands and `docs/EVIDENCE.md` for the
-source evidence behind the two r2p changes.
+See `TERMUX.md` for Android publishing commands and `docs/EVIDENCE.md` for the
+source evidence behind the backport.

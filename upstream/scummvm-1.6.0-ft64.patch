@@ -1,7 +1,7 @@
 diff --git a/engines/scumm/insane/insane.cpp b/engines/scumm/insane/insane.cpp
 --- a/engines/scumm/insane/insane.cpp
 +++ b/engines/scumm/insane/insane.cpp
-@@ -22,6 +22,7 @@ void Insane::queueSceneSwitch(int32 sceneId, byte *fluPtr, const char *filename,
+@@ -820,6 +820,7 @@
  void Insane::smush_rewindCurrentSan(int arg_0, int arg_4, int arg_8) {
  	debugC(DEBUG_INSANE, "smush_rewindCurrentSan(%d, %d, %d)", arg_0, arg_4, arg_8);
  	_smush_setupsan2 = arg_0;
@@ -9,7 +9,7 @@ diff --git a/engines/scumm/insane/insane.cpp b/engines/scumm/insane/insane.cpp
  
  	smush_setupSanFile(0, 0, 0);
  	_smush_isSanFileSetup = 1;
-@@ -46,6 +47,7 @@ int32 Insane::smush_setupSanWithFlu(const char *filename, int32 setupsan2, int32
+@@ -1346,6 +1347,7 @@ int32 Insane::smush_setupSanWithFlu(const char *filename, int32 setupsan2, int32
  		tmp += 8;
  
  	_smush_setupsan2 = setupsan2;
@@ -17,7 +17,7 @@ diff --git a/engines/scumm/insane/insane.cpp b/engines/scumm/insane/insane.cpp
  	if (tmp[2] <= 1) {
  		/* 0x300 -- palette, 0x8 -- header */
  		offset = READ_LE_UINT32(tmp + 0x308 + numFrames*4);
-@@ -58,6 +60,7 @@ void Insane::smush_setupSanFromStart(const char *filename, int32 setupsan2, int3
+@@ -1375,6 +1377,7 @@ void Insane::smush_setupSanFromStart(const char *filename, int32 setupsan2, int3
  	debugC(DEBUG_INSANE, "Insane::smush_setupFromStart(%s)", filename);
  	_smush_setupsan1 = setupsan1;
  	_smush_setupsan2 = setupsan2;
@@ -28,57 +28,50 @@ diff --git a/engines/scumm/insane/insane.cpp b/engines/scumm/insane/insane.cpp
 diff --git a/engines/scumm/smush/smush_player.cpp b/engines/scumm/smush/smush_player.cpp
 --- a/engines/scumm/smush/smush_player.cpp
 +++ b/engines/scumm/smush/smush_player.cpp
-@@ -23,6 +23,7 @@ SmushPlayer::SmushPlayer(ScummEngine_v7 *scumm) {
- 	_height = 0;
- 	_IACTpos = 0;
- 	_speed = -1;
-+	_curVideoFlags = 0;
+@@ -219,6 +219,7 @@ SmushPlayer::SmushPlayer(ScummEngine_v7 *scumm) {
  	_insanity = false;
  	_middleAudio = false;
  	_skipPalette = false;
-@@ -36,15 +37,34 @@ SmushPlayer::SmushPlayer(ScummEngine_v7 *scumm) {
++	_curVideoFlags = 0;
+ 	_IACTstream = NULL;
+ 	_smixer = _vm->_smixer;
+ 	_paused = false;
+@@ -850,15 +851,29 @@ SmushPlayer::SmushPlayer(ScummEngine_v7 *scumm) {
  void SmushPlayer::handleAnimHeader(int32 subSize, Common::SeekableReadStream &b) {
  	debugC(DEBUG_SMUSH, "SmushPlayer::handleAnimHeader()");
  	assert(subSize >= 0x300 + 6);
 -	/* _version = */ b.readUint16LE();
--	_nbframes = b.readUint16LE();
--	b.readUint16LE();
--
++	const byte headerMajorVersion = b.readByte();
++	const byte headerMinorVersion = b.readByte();
+ 	_nbframes = b.readUint16LE();
+ 	b.readUint16LE();
+ 
 -	if (_skipPalette)
-+	byte *headerContent = (byte *)malloc(subSize * sizeof(byte));
-+	if (!headerContent)
- 		return;
+-		return;
++	if (_skipPalette) {
++		b.skip(0x300);
++	} else {
++		readPalette(_pal, b);
++		setDirtyColors(0, 255);
++	}
  
 -	readPalette(_pal, b);
 -	setDirtyColors(0, 255);
-+	b.read(headerContent, subSize);
-+	const byte headerMajorVersion = headerContent[0];
-+	const byte headerMinorVersion = headerContent[1];
-+	_nbframes = READ_LE_UINT16(&headerContent[2]);
-+
-+	// Full Throttle (and the DIG demo) can encode the correct frame rate in
-+	// the AHDR/FLU header. Backported from ScummVM upstream commit 9e7e6a08.
-+	if (_vm->_game.id == GID_FT || (_vm->_game.id == GID_DIG && (_vm->_game.features & GF_DEMO))) {
-+		if (headerMajorVersion > 1 && subSize >= 0x300 + 8) {
-+			const uint16 speed = READ_LE_UINT16(&headerContent[6 + 0x300]);
-+			if ((_curVideoFlags & 8) == 0 && speed != 0) {
-+				debug(5, "SmushPlayer::handleAnimHeader(): header version %d.%d, video speed override %d fps (cur speed %d)",
-+					headerMajorVersion, headerMinorVersion, speed, _speed);
-+				_speed = speed;
-+			}
++	// Full Throttle SMUSH files can carry a per-video frame-rate override.
++	// This is a no-allocation 1.6.0 backport of upstream 9e7e6a0: after the
++	// six-byte AHDR prefix and 0x300-byte palette, version > 1 stores fps.
++	if (_vm->_game.id == GID_FT && headerMajorVersion > 1 && subSize >= 0x308) {
++		const uint16 speed = b.readUint16LE();
++		if ((_curVideoFlags & 8) == 0 && speed != 0) {
++			debug(5, "SmushPlayer::handleAnimHeader(): header version %d.%d, video speed override %d fps (cur speed %d)",
++				headerMajorVersion, headerMinorVersion, speed, _speed);
++			_speed = speed;
 +		}
 +	}
-+
-+	if (!_skipPalette) {
-+		memcpy(_pal, &headerContent[6], sizeof(_pal));
-+		setDirtyColors(0, 255);
-+	}
-+
-+	free(headerContent);
  }
  
  void SmushPlayer::setupAnim(const char *file) {
-@@ -55,5 +75,9 @@ void SmushPlayer::setupAnim(const char *file) {
+@@ -867,4 +882,8 @@ void SmushPlayer::setupAnim(const char *file) {
  		readString(file);
  }
  
@@ -87,26 +80,25 @@ diff --git a/engines/scumm/smush/smush_player.cpp b/engines/scumm/smush/smush_pl
 +}
 +
  SmushFont *SmushPlayer::getFont(int font) {
- 	char file_font[11];
 diff --git a/engines/scumm/smush/smush_player.h b/engines/scumm/smush/smush_player.h
 --- a/engines/scumm/smush/smush_player.h
 +++ b/engines/scumm/smush/smush_player.h
-@@ -5,6 +5,7 @@ private:
- 	int32 _IACTpos;
- 	bool _storeFrame;
- 	int _speed;
+@@ -75,6 +75,7 @@ private:
+ 	bool _insanity;
+ 	bool _middleAudio;
+ 	bool _skipPalette;
 +	int16 _curVideoFlags;
- 	bool _endOfFile;
- 
- 	byte *_dst;
-@@ -17,6 +18,7 @@ public:
+ public:
+ 	SmushPlayer(ScummEngine_v7 *scumm);
+ 	~SmushPlayer();
+@@ -83,6 +84,7 @@ public:
  	void play(const char *filename, int32 speed, int32 offset = 0, int32 startFrame = 0);
  	void release();
  	void warpMouse(int x, int y, int buttons);
 +	void setCurVideoFlags(int16 flags);
- 
  protected:
  	int _width, _height;
+ 	int _origPitch, _origNumStrips;
 diff --git a/gui/module.mk b/gui/module.mk
 --- a/gui/module.mk
 +++ b/gui/module.mk
