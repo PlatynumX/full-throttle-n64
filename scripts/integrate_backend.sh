@@ -91,15 +91,15 @@ done
 # the first contains "g++ -o ...", and the continuation contains LDFLAGS.
 # Audit one complete executable branch, not only its first physical line.
 dry_run="$ART/scummvm-dry-run.txt"
-make -C "$DST" -n full-throttle-n64-r2i.z64 \
+make -C "$DST" -n full-throttle-n64-r2j.z64 \
   > "$dry_run" 2> "$ART/scummvm-dry-run.stderr"
 link_block="$(awk '
-  /mips64-elf-g\+\+ -o build\/full-throttle-n64-r2i\.elf/ && !found {
+  /mips64-elf-g\+\+ -o build\/full-throttle-n64-r2j\.elf/ && !found {
     capture = 1
     found = 1
   }
   capture { print }
-  capture && /-Wl,-Map=build\/full-throttle-n64-r2i\.map;/ { exit }
+  capture && /-Wl,-Map=build\/full-throttle-n64-r2j\.map;/ { exit }
 ' "$dry_run")"
 if [ -z "$link_block" ]; then
   echo "could not find final ScummVM libdragon link recipe in make dry-run" >&2
@@ -128,8 +128,22 @@ for flag in '-march=vr4300' '-std=gnu++11'; do
   fi
 done
 
+# Pinned libdragon expands N64_TOOLFLAGS as --title $(N64_ROM_TITLE) without
+# adding shell quotes. Prove the generated packaging recipe passes the multi-word
+# title as one argument and reaches --output before any ROM input file.
+package_line="$(grep 'n64tool .*--output full-throttle-n64-r2j\.z64' "$dry_run" | head -1 || true)"
+if [ -z "$package_line" ]; then
+  echo "could not find generated n64tool packaging command" >&2
+  exit 1
+fi
+printf '%s\n' "$package_line" > "$ART/scummvm-n64tool-command.txt"
+if ! printf '%s\n' "$package_line" | grep -Fq -- '--title "Full Throttle N64" --toc --output full-throttle-n64-r2j.z64'; then
+  echo "expected quoted Full Throttle N64 title in generated n64tool command" >&2
+  exit 1
+fi
+
 # Capture the complete clean delta against the pinned source.
 git -C "$SCUMMVM" add -N backends/platform/n64libdragon
 git -C "$SCUMMVM" diff --check
-git -C "$SCUMMVM" diff > "$ART/r2i-source-delta.patch"
+git -C "$SCUMMVM" diff > "$ART/r2j-source-delta.patch"
 git -C "$SCUMMVM" status --short > "$ART/scummvm-status-after-integration.txt"

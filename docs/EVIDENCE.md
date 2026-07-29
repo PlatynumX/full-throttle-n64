@@ -1,4 +1,4 @@
-# Evidence / design notes — r2i
+# Evidence / design notes — r2j
 
 ## Pinned sources
 
@@ -116,3 +116,16 @@ therefore `-Tn64.ld` was not present in the single captured line even though it 
 present in the actual executable link branch. r2i audits the complete first g++
 branch through its `-Wl,-Map=...;` terminator. The backend flag-ownership change from
 r2h is unchanged.
+
+
+## r2j: final ROM packaging title
+
+The r2i ScummVM build compiled and linked through `full-throttle-n64-r2i.elf`, then failed when libdragon invoked `n64tool`. The generated command expanded the backend title as separate shell words before `--output`, causing `n64tool` to treat those words as input files and report `Need output flag before first file`.
+
+Pinned libdragon defines `N64_TOOLFLAGS = --title $(N64_ROM_TITLE)` and its own default `N64_ROM_TITLE` includes quotes. r2j follows that contract directly:
+
+```makefile
+N64_ROM_TITLE := "Full Throttle N64"
+```
+
+The title is 17 characters, within `n64tool`'s 20-character title limit. Integration dry-runs the actual final `.z64` target and refuses to compile unless the emitted `n64tool` command contains the quoted title immediately before `--toc --output full-throttle-n64-r2j.z64`.

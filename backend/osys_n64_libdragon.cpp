@@ -30,7 +30,7 @@ OSystem_N64Libdragon::OSystem_N64Libdragon()
 
     debug_init(DEBUG_FEATURE_LOG_USB | DEBUG_FEATURE_LOG_EMU);
     bool sd = debug_init_sdfs("sd:/", -1);
-    debugf("FT64 r2i: libdragon backend starting; sdfs=%d\n", sd ? 1 : 0);
+    debugf("FT64 r2j: libdragon backend starting; sdfs=%d\n", sd ? 1 : 0);
 
     display_init(RESOLUTION_320x240, DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE);
     joypad_init();
@@ -75,7 +75,7 @@ void OSystem_N64Libdragon::initBackend() {
 
     EventsBaseBackend::initBackend();
 
-    debugf("FT64 r2i: backend init complete; audio=%d Hz buffer=%d\n",
+    debugf("FT64 r2j: backend init complete; audio=%d Hz buffer=%d\n",
            audio_get_frequency(), audio_get_buffer_length());
 }
 
@@ -433,7 +433,7 @@ void OSystem_N64Libdragon::unlockMutex(MutexRef mutex) { (void)mutex; }
 void OSystem_N64Libdragon::deleteMutex(MutexRef mutex) { (void)mutex; }
 
 void OSystem_N64Libdragon::quit() {
-    debugf("FT64 r2i: quit requested\n");
+    debugf("FT64 r2j: quit requested\n");
 }
 
 Common::String OSystem_N64Libdragon::getDefaultConfigFileName() {
