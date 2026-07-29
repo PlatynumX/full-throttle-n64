@@ -1,6 +1,6 @@
-# Full Throttle N64 r2a — libdragon backend bring-up
+# Full Throttle N64 r2b — libdragon backend bring-up
 
-r2a supersedes the legacy `hkz-libn64` experiment from r1.
+r2b supersedes the legacy `hkz-libn64` experiment from r1.
 
 The target is deliberately narrow:
 
@@ -11,7 +11,7 @@ This repository does **not** contain the retail game. The CI workflow fetches
 ScummVM's publicly distributed DOS Full Throttle demo as the reproducible test
 payload and stages it as an SD-card artifact.
 
-## What r2a changes
+## What r2b changes
 
 * Keeps **ScummVM 1.6.0** as the initial engine baseline because it already has
   Full Throttle / SCUMM v7 support.
@@ -25,11 +25,11 @@ payload and stages it as an SD-card artifact.
 
 ## Build outputs
 
-The GitHub Action uploads one `full-throttle-n64-r2a-build-report` artifact
+The GitHub Action uploads one `full-throttle-n64-r2b-build-report` artifact
 containing:
 
 * `ft64-sd-probe.z64` — libdragon/SummerCart hardware probe.
-* `full-throttle-n64-r2a.z64` — ScummVM/SCUMM v7 integration ROM if the backend
+* `full-throttle-n64-r2b.z64` — ScummVM/SCUMM v7 integration ROM if the backend
   compiles and links.
 * `sdcard/fullthrottle/` — extracted official demo payload to copy to SD.
 * source/patch/build logs and version pins.
@@ -55,7 +55,7 @@ The ScummVM executable is launched with:
 -p sd:/fullthrottle ft
 ```
 
-## Controller mapping for r2a
+## Controller mapping for r2b
 
 * Analog stick — mouse pointer
 * Z — left mouse button
@@ -68,16 +68,29 @@ Input can be refined after the game reaches hardware.
 
 ## Safety
 
-r2a does **not** use the historical N64 Controller Pak / FlashRAM save managers.
+r2b does **not** use the historical N64 Controller Pak / FlashRAM save managers.
 Save files are routed to the SD card.
 
 ## Local preflight
 
 ```bash
-./scripts/preflight.sh
+bash ./scripts/preflight.sh
 ```
 
 The actual N64 cross-build is expected to run in GitHub Actions unless you
 already have the current libdragon toolchain installed. The source ZIP does not
 duplicate the ~99 MB demo archive; CI fetches the official archive, verifies it,
 and packages the extracted demo under the build artifact's `sdcard/fullthrottle/` directory.
+
+## r2b: native libdragon filesystem
+
+r2b is based on the first real CI compiler failure from r2a. The pinned libdragon
+Newlib intentionally does not support POSIX `<dirent.h>`. r2b therefore removes
+ScummVM's POSIX filesystem shim entirely and supplies a native filesystem adapter
+using libdragon `dir_t`, `dir_findfirst()` and `dir_findnext()`. File streams still
+use normal `fopen()` through ScummVM's `StdioStream` after `sd:/` is mounted.
+
+The pinned libdragon FAT adapter does not expose a `mkdir` callback, so the build
+artifact stages `sd:/fullthrottle/saves/.keep`; runtime code no longer tries to
+create directories. Both the standalone probe and ScummVM integration build are
+allowed to run in CI even if one fails, so one run captures both compiler logs.

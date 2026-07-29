@@ -2,7 +2,7 @@
 
 #include "backends/platform/n64libdragon/osys_n64_libdragon.h"
 
-#include "backends/fs/posix/posix-fs-factory.h"
+#include "backends/platform/n64libdragon/n64libdragon-fs.h"
 #include "backends/saves/default/default-saves.h"
 #include "backends/timer/default/default-timer.h"
 #include "common/config-manager.h"
@@ -11,7 +11,6 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
-#include <sys/stat.h>
 
 static const OSystem::GraphicsMode s_modes[] = {
     { "320x240", "320x240", 0 },
@@ -31,7 +30,7 @@ OSystem_N64Libdragon::OSystem_N64Libdragon()
 
     debug_init(DEBUG_FEATURE_LOG_USB | DEBUG_FEATURE_LOG_EMU);
     bool sd = debug_init_sdfs("sd:/", -1);
-    debugf("FT64 r2a: libdragon backend starting; sdfs=%d\n", sd ? 1 : 0);
+    debugf("FT64 r2b: libdragon backend starting; sdfs=%d\n", sd ? 1 : 0);
 
     display_init(RESOLUTION_320x240, DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE);
     joypad_init();
@@ -44,7 +43,7 @@ OSystem_N64Libdragon::OSystem_N64Libdragon()
     memset(_exactPalette, 0, sizeof(_exactPalette));
     memset(_cursorPalette, 0, sizeof(_cursorPalette));
 
-    _fsFactory = new POSIXFilesystemFactory();
+    _fsFactory = new N64LibdragonFilesystemFactory();
 }
 
 OSystem_N64Libdragon::~OSystem_N64Libdragon() {
@@ -64,9 +63,6 @@ OSystem_N64Libdragon::~OSystem_N64Libdragon() {
 }
 
 void OSystem_N64Libdragon::initBackend() {
-    mkdir("sd:/fullthrottle", 0777);
-    mkdir("sd:/fullthrottle/saves", 0777);
-
     ConfMan.setInt("autosave_period", 0);
     ConfMan.setBool("FM_high_quality", false);
     ConfMan.setBool("FM_medium_quality", true);
@@ -79,7 +75,7 @@ void OSystem_N64Libdragon::initBackend() {
 
     EventsBaseBackend::initBackend();
 
-    debugf("FT64 r2a: backend init complete; audio=%d Hz buffer=%d\n",
+    debugf("FT64 r2b: backend init complete; audio=%d Hz buffer=%d\n",
            audio_get_frequency(), audio_get_buffer_length());
 }
 
@@ -437,7 +433,7 @@ void OSystem_N64Libdragon::unlockMutex(MutexRef mutex) { (void)mutex; }
 void OSystem_N64Libdragon::deleteMutex(MutexRef mutex) { (void)mutex; }
 
 void OSystem_N64Libdragon::quit() {
-    debugf("FT64 r2a: quit requested\n");
+    debugf("FT64 r2b: quit requested\n");
 }
 
 Common::String OSystem_N64Libdragon::getDefaultConfigFileName() {

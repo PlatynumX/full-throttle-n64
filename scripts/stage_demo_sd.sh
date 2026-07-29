@@ -22,6 +22,7 @@ else
 fi
 
 mkdir -p "$OUT/saves"
+printf 'Full Throttle N64 save directory\n' > "$OUT/saves/.keep"
 printf 'scumm:ft\n' > "$OUT/Full Throttle.scummvm"
 find "$OUT" -maxdepth 2 -type f -printf '%P %s bytes\n' | sort \
   > "$ROOT/artifacts/demo-file-list.txt"
