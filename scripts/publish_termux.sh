@@ -3,9 +3,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REPO_URL="${FT64_REPO_URL:-https://github.com/PlatynumX/full-throttle-n64.git}"
-DEST="${HOME}/ft64-r2d-push"
+DEST="${HOME}/ft64-r2e-push"
 
-printf '[publish] validating pristine r2d tree\n'
+printf '[publish] validating pristine r2e tree\n'
 bash "$ROOT/scripts/preflight.sh"
 
 printf '[publish] fresh-cloning %s\n' "$REPO_URL"
@@ -32,14 +32,14 @@ git add -A
 git diff --cached --check
 
 if git diff --cached --quiet; then
-  echo '[publish] remote already matches r2d; nothing to commit.'
+  echo '[publish] remote already matches r2e; nothing to commit.'
   exit 0
 fi
 
-git commit -m 'Full Throttle N64 r2d clean backend baseline'
+git commit -m 'Full Throttle N64 r2e clean backend baseline'
 # Race-safe without ever force pushing. Actions has contents:read and cannot move master.
 git fetch origin master
 git rebase origin/master
 git push origin master
 
-echo '[publish] r2d pushed successfully.'
+echo '[publish] r2e pushed successfully.'

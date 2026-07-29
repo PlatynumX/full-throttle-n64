@@ -21,6 +21,8 @@ cp "$SRC/Makefile.libdragon" "$DST/Makefile"
 # ScummVM's POSIX filesystem, because libdragon does not implement dirent.h.
 grep -q 'ifdef ENABLE_SCUMM_7_8' "$SCUMMVM/engines/scumm/module.mk"
 grep -q 'ENABLE_SCUMM_7_8' "$SCUMMVM/engines/engines.mk"
+test -f "$SCUMMVM/engines/scumm/scumm.h"
+grep -Fq 'INCLUDES += -I. -I$(srcdir) -I$(srcdir)/engines' "$DST/Makefile"
 grep -q 'ENABLE_SCUMM_7_8 := $(ENABLED)' "$DST/Makefile"
 ! grep -R -n 'backends/fs/posix\|<dirent.h>' "$DST"
 grep -q '#include <dir.h>' "$DST/n64libdragon-fs.cpp"
@@ -30,5 +32,5 @@ grep -q 'dir_findfirst' "$DST/n64libdragon-fs.cpp"
 # staging their contents or mutating any upstream ScummVM source.
 git -C "$SCUMMVM" add -N backends/platform/n64libdragon
 git -C "$SCUMMVM" diff --check
-git -C "$SCUMMVM" diff > "$ROOT/artifacts/r2d-backend.patch"
+git -C "$SCUMMVM" diff > "$ROOT/artifacts/r2e-backend.patch"
 git -C "$SCUMMVM" status --short > "$ROOT/artifacts/scummvm-status-after-integration.txt"

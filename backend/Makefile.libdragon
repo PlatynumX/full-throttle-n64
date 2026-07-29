@@ -1,4 +1,4 @@
-# Full Throttle N64 r2d
+# Full Throttle N64 r2e
 # ScummVM 1.6.0 + new libdragon backend.
 
 srcdir := ../../..
@@ -17,7 +17,7 @@ N64_CFLAGS := $(filter-out -Werror,$(N64_CFLAGS))
 N64_CXXFLAGS := $(filter-out -Werror -std=gnu++17,$(N64_CXXFLAGS)) -std=gnu++11
 
 # n64.mk defines defaults, so project-specific metadata must follow the include.
-N64_ROM_TITLE := Full Throttle N64 r2d
+N64_ROM_TITLE := Full Throttle N64 r2e
 N64_ROM_REGIONFREE := true
 N64_ROM_CONTROLLER1 := n64
 
@@ -50,8 +50,10 @@ DEFINES += -DDISABLE_DOSBOX_OPL
 DEFINES += -DDISABLE_TEXT_CONSOLE
 DEFINES += -DN64_EXTREME_MEMORY_SAVING
 
-CFLAGS += $(DEFINES) -I$(srcdir)
-CXXFLAGS += $(DEFINES) -I$(srcdir)
+# ScummVM 1.6.0 engine sources include headers as e.g. "scumm/scumm.h".
+# Its historical N64 Makefile therefore exposed both the source root and
+# $(srcdir)/engines. Keep that source-layout contract in the libdragon port.
+INCLUDES += -I. -I$(srcdir) -I$(srcdir)/engines
 
 BACKEND := n64libdragon
 ENABLED := STATIC_PLUGIN
@@ -65,7 +67,7 @@ OBJS := \
 
 include $(srcdir)/Makefile.common
 
-TARGET := full-throttle-n64-r2d
+TARGET := full-throttle-n64-r2e
 
 all: $(TARGET).z64
 

@@ -16,12 +16,13 @@ if grep -RInE '^(<<<<<<<|=======|>>>>>>>)' \
   exit 1
 fi
 
-echo "[preflight] required r2d backend gates"
+echo "[preflight] required r2e backend gates"
 grep -q 'ENABLE_SCUMM_7_8 := $(ENABLED)' backend/Makefile.libdragon
 grep -q 'N64_LIBDRAGON' backend/Makefile.libdragon
 grep -q '^MKDIR := mkdir -p' backend/Makefile.libdragon
 grep -q 'filter-out -Werror' backend/Makefile.libdragon
 grep -q -- '-std=gnu++11' backend/Makefile.libdragon
+grep -Fq 'INCLUDES += -I. -I$(srcdir) -I$(srcdir)/engines' backend/Makefile.libdragon
 grep -q 'N64LibdragonFilesystemFactory' backend/osys_n64_libdragon.cpp
 grep -q 'n64libdragon-fs.o' backend/Makefile.libdragon
 grep -q '#include <dir.h>' backend/n64libdragon-fs.cpp
@@ -46,27 +47,31 @@ grep -q 'saves/.keep' scripts/stage_demo_sd.sh
 
 echo "[preflight] previous CI regression guards"
 if grep -R -nE '^N64_ROM_CONTROLLER1[[:space:]]*[:?+]?=[[:space:]]*joypad$' backend probe; then
-  echo "invalid libdragon ROM-header controller metadata leaked into r2d" >&2
+  echo "invalid libdragon ROM-header controller metadata leaked into r2e" >&2
   exit 1
 fi
 if grep -R -n 'getPixels()' backend; then
   echo "newer ScummVM Surface::getPixels API leaked into pinned 1.6.0 backend" >&2
   exit 1
 fi
+if grep -nE '^(CFLAGS|CXXFLAGS).*\$\(DEFINES\)' backend/Makefile.libdragon; then
+  echo "DEFINES duplicated into compiler flags; Makefile.common supplies them via CPPFLAGS" >&2
+  exit 1
+fi
 
 echo "[preflight] no unsupported POSIX directory backend"
 if grep -R -nE '<dirent\.h>|opendir\(|readdir\(|closedir\(|backends/fs/posix' backend probe; then
-  echo "unsupported POSIX directory dependency leaked into r2d" >&2
+  echo "unsupported POSIX directory dependency leaked into r2e" >&2
   exit 1
 fi
 if grep -R -nE 'mkdir\("sd:/' backend probe; then
-  echo "runtime SD mkdir leaked into r2d; pinned libdragon FAT has no mkdir hook" >&2
+  echo "runtime SD mkdir leaked into r2e; pinned libdragon FAT has no mkdir hook" >&2
   exit 1
 fi
 
 echo "[preflight] no known legacy/freeze traps"
 if grep -R -nE 'hkz-libn64|libn64\.h|pakfs|framfs|initRomFSmanager|NONSTANDARD_PORT' backend probe; then
-  echo "legacy N64 dependency leaked into r2d backend" >&2
+  echo "legacy N64 dependency leaked into r2e backend" >&2
   exit 1
 fi
 if grep -n 'for *(;;)' backend/osys_n64_libdragon.cpp; then
@@ -79,7 +84,7 @@ if grep -R -n '_timerCallback\|setTimerCallback' backend; then
 fi
 
 echo "[preflight] CI does not depend on executable script bits"
-if grep -nE 'run: \./scripts/|^[[:space:]]+\./scripts/' .github/workflows/build-full-throttle-r2d.yml; then
+if grep -nE 'run: \./scripts/|^[[:space:]]+\./scripts/' .github/workflows/build-full-throttle-r2e.yml; then
   echo "workflow invokes repository scripts directly; use bash ./scripts/..." >&2
   exit 1
 fi
@@ -89,13 +94,13 @@ if grep -nE '^\./scripts/' scripts/run_all.sh; then
 fi
 
 echo "[preflight] both N64 compile paths preserve diagnostics"
-grep -q 'id: probe' .github/workflows/build-full-throttle-r2d.yml
-grep -q 'id: scummvm' .github/workflows/build-full-throttle-r2d.yml
-[ "$(grep -c 'continue-on-error: true' .github/workflows/build-full-throttle-r2d.yml)" -eq 2 ]
+grep -q 'id: probe' .github/workflows/build-full-throttle-r2e.yml
+grep -q 'id: scummvm' .github/workflows/build-full-throttle-r2e.yml
+[ "$(grep -c 'continue-on-error: true' .github/workflows/build-full-throttle-r2e.yml)" -eq 2 ]
 
 echo "[preflight] demo and toolchain URLs"
 grep -q 'downloads.scummvm.org/frs/demos/scumm/ft-dos-demo-en.zip' scripts/fetch_demo.sh
-grep -q 'toolchain-continuous-prerelease/gcc-toolchain-mips64-x86_64.deb' .github/workflows/build-full-throttle-r2d.yml
+grep -q 'toolchain-continuous-prerelease/gcc-toolchain-mips64-x86_64.deb' .github/workflows/build-full-throttle-r2e.yml
 grep -q '35f85a0797324a5ed0c723203e33ab3c1da94fdd' scripts/fetch_libdragon.sh
 
 echo "[preflight] OK"
