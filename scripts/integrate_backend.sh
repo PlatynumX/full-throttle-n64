@@ -58,7 +58,7 @@ grep -q 'dir_findfirst' "$DST/n64libdragon-fs.cpp"
 
 # Make's module rules archive GUI objects into gui/libgui.a. Prove the actual
 # graph no longer contains predictivedialog.o before starting compilation.
-make -C "$DST" -pn > "$ART/scummvm-make-database.txt"
+make -C "$DST" -pn > "$ART/scummvm-make-database.txt" 2> "$ART/scummvm-make-database.stderr"
 gui_rule="$(grep '^gui/libgui\.a:' "$ART/scummvm-make-database.txt" | head -1 || true)"
 if [ -z "$gui_rule" ]; then
   echo "could not find gui/libgui.a in generated make database" >&2
@@ -86,20 +86,27 @@ for required in \
   fi
 done
 
-# Verify the actual libdragon/ScummVM dry-run link command before compilation.
-# n64.mk propagates N64_LDFLAGS from the .z64 target into the ELF prerequisite;
-# the backend must not seed LDFLAGS with a second copy.
+# Verify the actual libdragon/ScummVM dry-run link recipe before compilation.
+# Pinned libdragon n64.mk emits each g++ link branch across two physical lines:
+# the first contains "g++ -o ...", and the continuation contains LDFLAGS.
+# Audit one complete executable branch, not only its first physical line.
 dry_run="$ART/scummvm-dry-run.txt"
-make -C "$DST" -n full-throttle-n64-r2h.z64 > "$dry_run"
-link_line="$(grep 'mips64-elf-g++ -o build/full-throttle-n64-r2h\.elf' "$dry_run" | head -1 || true)"
-if [ -z "$link_line" ]; then
-  echo "could not find final ScummVM libdragon link command in make dry-run" >&2
+make -C "$DST" -n full-throttle-n64-r2i.z64 \
+  > "$dry_run" 2> "$ART/scummvm-dry-run.stderr"
+link_block="$(awk '
+  /mips64-elf-g\+\+ -o build\/full-throttle-n64-r2i\.elf/ && !found {
+    capture = 1
+    found = 1
+  }
+  capture { print }
+  capture && /-Wl,-Map=build\/full-throttle-n64-r2i\.map;/ { exit }
+' "$dry_run")"
+if [ -z "$link_block" ]; then
+  echo "could not find final ScummVM libdragon link recipe in make dry-run" >&2
   exit 1
 fi
-printf '%s
-' "$link_line" > "$ART/scummvm-link-command.txt"
-linker_script_count="$( (printf '%s
-' "$link_line" | grep -o -- '-Tn64\.ld' || true) | wc -l | tr -d ' ')"
+printf '%s\n' "$link_block" > "$ART/scummvm-link-command.txt"
+linker_script_count="$( (printf '%s\n' "$link_block" | grep -o -- '-Tn64\.ld' || true) | wc -l | tr -d ' ')"
 if [ "$linker_script_count" -ne 1 ]; then
   echo "expected exactly one n64.ld linker script flag, found $linker_script_count" >&2
   exit 1
@@ -124,5 +131,5 @@ done
 # Capture the complete clean delta against the pinned source.
 git -C "$SCUMMVM" add -N backends/platform/n64libdragon
 git -C "$SCUMMVM" diff --check
-git -C "$SCUMMVM" diff > "$ART/r2h-source-delta.patch"
+git -C "$SCUMMVM" diff > "$ART/r2i-source-delta.patch"
 git -C "$SCUMMVM" status --short > "$ART/scummvm-status-after-integration.txt"

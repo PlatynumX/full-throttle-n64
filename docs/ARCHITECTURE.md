@@ -1,4 +1,4 @@
-# r2h architecture
+# r2i architecture
 
 ## Engine
 

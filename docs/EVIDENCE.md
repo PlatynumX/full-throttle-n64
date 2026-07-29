@@ -1,4 +1,4 @@
-# Evidence / design notes — r2h
+# Evidence / design notes — r2i
 
 ## Pinned sources
 
@@ -41,11 +41,11 @@ ScummVM 1.6.0 `Makefile.common` first includes every module's `module.mk`. `rule
 gui/*.o -> gui/libgui.a -> top-level OBJS
 ```
 
-By the time the r2f filter ran, `gui/predictivedialog.o` had already become a prerequisite of `gui/libgui.a`. The r2f filter is removed entirely in r2h.
+By the time the r2f filter ran, `gui/predictivedialog.o` had already become a prerequisite of `gui/libgui.a`. The r2f filter is removed entirely in r2i.
 
-## r2h source change
+## r2i source change
 
-r2h always starts with the pristine pinned ScummVM tree and applies exactly one normal Git patch:
+r2i always starts with the pristine pinned ScummVM tree and applies exactly one normal Git patch:
 
 ```text
 upstream/scummvm-1.6.0-ft64.patch
@@ -57,7 +57,7 @@ That patch removes `predictivedialog.o` from `gui/module.mk` before `Makefile.co
 
 ## Dependency-graph proof
 
-After integration and before compilation, r2h runs `make -pn` against the actual pinned ScummVM + libdragon Makefile and records the generated make database.
+After integration and before compilation, r2i runs `make -pn` against the actual pinned ScummVM + libdragon Makefile and records the generated make database.
 
 The build is stopped unless:
 
@@ -69,15 +69,15 @@ The build is stopped unless:
 This is the guard that r2f was missing.
 
 
-## r2g final-link failure and r2h correction
+## r2g final-link failure and r2i correction
 
 r2g reached the final ELF link, proving the Full Throttle-only ScummVM source set compiled. The linker failed with `linker script file 'n64.ld' appears multiple times`.
 
 Pinned libdragon `n64.mk` defines `N64_LDFLAGS` with `-Tn64.ld` and appends `N64_LDFLAGS` as a target-specific `LDFLAGS` value on `%.z64`. That target-specific value is inherited by the ELF prerequisite. r2g also initialized global `LDFLAGS` from `N64_LDFLAGS`, producing two copies. The same duplication affected C/C++/assembler platform flags.
 
-r2h therefore does not copy any `N64_*FLAGS` variable into generic flags. It normalizes libdragon's `N64_CFLAGS`/`N64_CXXFLAGS` once (removing `-Werror` and selecting C++11), then lets libdragon propagate them. The generic `CXXFLAGS` contains only the ScummVM-specific `-fno-rtti -fno-exceptions` delta.
+r2i therefore does not copy any `N64_*FLAGS` variable into generic flags. It normalizes libdragon's `N64_CFLAGS`/`N64_CXXFLAGS` once (removing `-Werror` and selecting C++11), then lets libdragon propagate them. The generic `CXXFLAGS` contains only the ScummVM-specific `-fno-rtti -fno-exceptions` delta.
 
-Before compilation, integration now performs a GNU make dry run of `full-throttle-n64-r2h.z64`, captures the exact final G++ link command, and requires exactly one `-Tn64.ld`.
+Before compilation, integration now performs a GNU make dry run of `full-throttle-n64-r2i.z64`, captures the exact final G++ link command, and requires exactly one `-Tn64.ld`.
 
 ## Prior compiler-proven corrections retained
 
@@ -105,4 +105,14 @@ File streams use ScummVM `StdioStream` over libdragon/Newlib after `sd:/` is mou
 
 ## Historical N64 backend
 
-The old ScummVM N64 backend remains useful reference material but is not linked into this target. r2h does not use hkz-libn64, ROMFS, PakFS or FRAMFS.
+The old ScummVM N64 backend remains useful reference material but is not linked into this target. r2i does not use hkz-libn64, ROMFS, PakFS or FRAMFS.
+
+## r2i: linker-audit false negative
+
+The r2h CI integration step failed before compilation because its audit captured only
+the first physical line of libdragon's final g++ recipe. In pinned libdragon n64.mk,
+the g++ invocation is continued onto the following line, where `$(LDFLAGS)` expands;
+therefore `-Tn64.ld` was not present in the single captured line even though it is
+present in the actual executable link branch. r2i audits the complete first g++
+branch through its `-Wl,-Map=...;` terminator. The backend flag-ownership change from
+r2h is unchanged.
