@@ -59,18 +59,20 @@ grep -q 'dir_findfirst' "$DST/n64libdragon-fs.cpp"
 # Make's module rules archive GUI objects into gui/libgui.a. Prove the actual
 # graph no longer contains predictivedialog.o before starting compilation.
 make -C "$DST" -pn > "$ART/scummvm-make-database.txt" 2> "$ART/scummvm-make-database.stderr"
-gui_rule="$(grep '^gui/libgui\.a:' "$ART/scummvm-make-database.txt" | head -1 || true)"
+# Use awk's native first-match exit rather than grep|head. With pipefail enabled,
+# intentional early pipe closure can turn a successful inspection into SIGPIPE.
+gui_rule="$(awk '/^gui\/libgui\.a:/ { print; exit }' "$ART/scummvm-make-database.txt")"
 if [ -z "$gui_rule" ]; then
   echo "could not find gui/libgui.a in generated make database" >&2
   exit 1
 fi
 printf '%s\n' "$gui_rule" > "$ART/gui-libgui-rule.txt"
-if printf '%s\n' "$gui_rule" | grep -q 'gui/predictivedialog\.o'; then
+if [[ "$gui_rule" == *"gui/predictivedialog.o"* ]]; then
   echo "predictivedialog.o is still a gui/libgui.a prerequisite" >&2
   exit 1
 fi
 
-scumm_rule="$(grep '^engines/scumm/libscumm\.a:' "$ART/scummvm-make-database.txt" | head -1 || true)"
+scumm_rule="$(awk '/^engines\/scumm\/libscumm\.a:/ { print; exit }' "$ART/scummvm-make-database.txt")"
 if [ -z "$scumm_rule" ]; then
   echo "could not find engines/scumm/libscumm.a in generated make database" >&2
   exit 1
@@ -80,7 +82,7 @@ for required in \
   engines/scumm/insane/insane.o \
   engines/scumm/smush/smush_player.o \
   engines/scumm/imuse_digi/dimuse.o; do
-  if ! printf '%s\n' "$scumm_rule" | grep -Fq "$required"; then
+  if [[ "$scumm_rule" != *"$required"* ]]; then
     echo "Full Throttle required object missing from SCUMM module: $required" >&2
     exit 1
   fi
@@ -91,37 +93,35 @@ done
 # the first contains "g++ -o ...", and the continuation contains LDFLAGS.
 # Audit one complete executable branch, not only its first physical line.
 dry_run="$ART/scummvm-dry-run.txt"
-make -C "$DST" -n full-throttle-n64-r2j.z64 \
+make -C "$DST" -n full-throttle-n64-r2k.z64 \
   > "$dry_run" 2> "$ART/scummvm-dry-run.stderr"
 link_block="$(awk '
-  /mips64-elf-g\+\+ -o build\/full-throttle-n64-r2j\.elf/ && !found {
+  /mips64-elf-g\+\+ -o build\/full-throttle-n64-r2k\.elf/ && !found {
     capture = 1
     found = 1
   }
   capture { print }
-  capture && /-Wl,-Map=build\/full-throttle-n64-r2j\.map;/ { exit }
+  capture && /-Wl,-Map=build\/full-throttle-n64-r2k\.map;/ { exit }
 ' "$dry_run")"
 if [ -z "$link_block" ]; then
   echo "could not find final ScummVM libdragon link recipe in make dry-run" >&2
   exit 1
 fi
 printf '%s\n' "$link_block" > "$ART/scummvm-link-command.txt"
-linker_script_count="$( (printf '%s\n' "$link_block" | grep -o -- '-Tn64\.ld' || true) | wc -l | tr -d ' ')"
+linker_script_count="$(awk '{ n += gsub(/-Tn64\.ld/, "") } END { print n + 0 }' <<< "$link_block")"
 if [ "$linker_script_count" -ne 1 ]; then
   echo "expected exactly one n64.ld linker script flag, found $linker_script_count" >&2
   exit 1
 fi
 
-compile_line="$(grep 'mips64-elf-g++ .* -c ' "$dry_run" | head -1 || true)"
+compile_line="$(awk '/mips64-elf-g\+\+ .* -c / { print; exit }' "$dry_run")"
 if [ -z "$compile_line" ]; then
   echo "could not find a C++ compile command in make dry-run" >&2
   exit 1
 fi
-printf '%s
-' "$compile_line" > "$ART/scummvm-cxx-command.txt"
+printf '%s\n' "$compile_line" > "$ART/scummvm-cxx-command.txt"
 for flag in '-march=vr4300' '-std=gnu++11'; do
-  flag_count="$( (printf '%s
-' "$compile_line" | grep -o -- "$flag" || true) | wc -l | tr -d ' ')"
+  flag_count="$(awk -v flag="$flag" '{ n += gsub(flag, "") } END { print n + 0 }' <<< "$compile_line")"
   if [ "$flag_count" -ne 1 ]; then
     echo "expected exactly one $flag in C++ compile command, found $flag_count" >&2
     exit 1
@@ -129,21 +129,25 @@ for flag in '-march=vr4300' '-std=gnu++11'; do
 done
 
 # Pinned libdragon expands N64_TOOLFLAGS as --title $(N64_ROM_TITLE) without
-# adding shell quotes. Prove the generated packaging recipe passes the multi-word
-# title as one argument and reaches --output before any ROM input file.
-package_line="$(grep 'n64tool .*--output full-throttle-n64-r2j\.z64' "$dry_run" | head -1 || true)"
+# adding shell quotes. Inspect the actual make -n recipe without a short-circuiting
+# pipeline, then compare it in Bash so pipefail cannot turn a successful match
+# into an audit failure.
+package_line="$(awk '/n64tool .*--output full-throttle-n64-r2k\.z64/ { print; exit }' "$dry_run")"
 if [ -z "$package_line" ]; then
   echo "could not find generated n64tool packaging command" >&2
   exit 1
 fi
 printf '%s\n' "$package_line" > "$ART/scummvm-n64tool-command.txt"
-if ! printf '%s\n' "$package_line" | grep -Fq -- '--title "Full Throttle N64" --toc --output full-throttle-n64-r2j.z64'; then
+printf 'verified n64tool recipe: %s\n' "$package_line"
+expected_package='--title "Full Throttle N64" --toc --output full-throttle-n64-r2k.z64'
+if [[ "$package_line" != *"$expected_package"* ]]; then
   echo "expected quoted Full Throttle N64 title in generated n64tool command" >&2
+  printf 'observed n64tool command: %s\n' "$package_line" >&2
   exit 1
 fi
 
 # Capture the complete clean delta against the pinned source.
 git -C "$SCUMMVM" add -N backends/platform/n64libdragon
 git -C "$SCUMMVM" diff --check
-git -C "$SCUMMVM" diff > "$ART/r2j-source-delta.patch"
+git -C "$SCUMMVM" diff > "$ART/r2k-source-delta.patch"
 git -C "$SCUMMVM" status --short > "$ART/scummvm-status-after-integration.txt"
