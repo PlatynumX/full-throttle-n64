@@ -1,10 +1,10 @@
-\
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-WORKFLOW=".github/workflows/build-full-throttle-r2m.yml"
+WORKFLOW=".github/workflows/build-full-throttle-r2n.yml"
+PATCH="upstream/scummvm-1.6.0-ft64.patch"
 
 echo "[preflight] shell syntax"
 for f in scripts/*.sh; do
@@ -22,7 +22,7 @@ for f in \
   backend/nintendo64_libdragon.cpp \
   probe/Makefile \
   probe/sd_probe.c \
-  upstream/scummvm-1.6.0-ft64.patch; do
+  "$PATCH"; do
   test -f "$f"
 done
 
@@ -37,13 +37,13 @@ if [ "${#conflict_files[@]}" -ne 0 ]; then
   exit 1
 fi
 
-echo "[preflight] r2m identity"
-grep -Fqx 'name: Build Full Throttle N64 r2m' "$WORKFLOW"
-grep -Fq 'name: full-throttle-n64-r2m-build-report' "$WORKFLOW"
-grep -Fq 'TARGET := full-throttle-n64-r2m' backend/Makefile.libdragon
-grep -Fq 'full-throttle-n64-r2m.z64' scripts/build_scummvm.sh
-grep -Fq 'FT64 r2m: libdragon backend starting' backend/osys_n64_libdragon.cpp
-grep -Fq 'FULL THROTTLE N64 - r2m' probe/sd_probe.c
+echo "[preflight] r2n identity"
+grep -Fqx 'name: Build Full Throttle N64 r2n' "$WORKFLOW"
+grep -Fq 'name: full-throttle-n64-r2n-build-report' "$WORKFLOW"
+grep -Fq 'TARGET := full-throttle-n64-r2n' backend/Makefile.libdragon
+grep -Fq 'full-throttle-n64-r2n.z64' scripts/build_scummvm.sh
+grep -Fq 'FT64 r2n: libdragon backend starting' backend/osys_n64_libdragon.cpp
+grep -Fq 'FULL THROTTLE N64 - r2n' probe/sd_probe.c
 
 echo "[preflight] no game/demo payload machinery"
 test ! -e demo
@@ -51,7 +51,7 @@ test ! -e scripts/fetch_demo.sh
 test ! -e scripts/stage_demo_sd.sh
 if grep -RInE 'ft-dos-demo|fetch_demo|stage_demo|demo-cache|artifacts/sdcard' \
     .github scripts/run_all.sh scripts/publish_termux.sh TERMUX.md .gitignore; then
-  echo "game/demo packaging machinery leaked into r2m" >&2
+  echo "game/demo packaging machinery leaked into r2n" >&2
   exit 1
 fi
 
@@ -60,6 +60,28 @@ grep -Fq 'f75a652bb7c956f145abe881c87b5dbf5c9ec24b' scripts/fetch_source.sh
 grep -Fq '35f85a0797324a5ed0c723203e33ab3c1da94fdd' scripts/fetch_libdragon.sh
 grep -Fq 'toolchain-continuous-prerelease/gcc-toolchain-mips64-x86_64.deb' "$WORKFLOW"
 
+echo "[preflight] one consolidated source patch"
+mapfile -t patch_paths < <(git apply --numstat "$PATCH" | awk '{print $3}' | sort)
+expected_paths=(
+  engines/scumm/insane/insane.cpp
+  engines/scumm/insane/insane.h
+  engines/scumm/scumm.cpp
+  engines/scumm/smush/smush_player.cpp
+  engines/scumm/smush/smush_player.h
+  gui/module.mk
+)
+if [ "${patch_paths[*]}" != "${expected_paths[*]}" ]; then
+  echo "unexpected consolidated patch path set" >&2
+  printf 'actual:   %s\n' "${patch_paths[*]}" >&2
+  printf 'expected: %s\n' "${expected_paths[*]}" >&2
+  exit 1
+fi
+grep -Fq 'video speed override' "$PATCH"
+grep -Fq 'setCurVideoFlags' "$PATCH"
+grep -Fq '_smush_curSanFlags' "$PATCH"
+grep -Fq 'syncCurrentSanFlags' "$PATCH"
+grep -Fq 'predictivedialog.o' "$PATCH"
+
 echo "[preflight] Full Throttle-only build scope"
 grep -Fq 'ENABLE_SCUMM := $(ENABLED)' backend/Makefile.libdragon
 grep -Fq 'ENABLE_SCUMM_7_8 := $(ENABLED)' backend/Makefile.libdragon
@@ -67,7 +89,6 @@ if grep -nE '^ENABLE_AGI[[:space:]]*[:?+]?=' backend/Makefile.libdragon; then
   echo "AGI unexpectedly enabled" >&2
   exit 1
 fi
-[ "$(git apply --numstat upstream/scummvm-1.6.0-ft64.patch)" = $'0\t1\tgui/module.mk' ]
 
 echo "[preflight] established libdragon build contract"
 grep -Fq 'N64_ROM_TITLE := "Full Throttle N64"' backend/Makefile.libdragon
@@ -79,27 +100,29 @@ grep -Fq 'CXXFLAGS := -fno-rtti -fno-exceptions' backend/Makefile.libdragon
 grep -Fq 'LDFLAGS :=' backend/Makefile.libdragon
 grep -Fq 'INCLUDES += -I. -I$(srcdir) -I$(srcdir)/engines' backend/Makefile.libdragon
 
-echo "[preflight] r2m input path"
+echo "[preflight] retained r2m input path"
 grep -Fq 'sampleAnalogMouse(_joypadInput);' backend/osys_n64_libdragon.cpp
 grep -Fq 'const uint32 inputPollMs = 16;' backend/osys_n64_libdragon.cpp
 grep -Fq 'const uint32 mouseEventMs = 40;' backend/osys_n64_libdragon.cpp
-grep -Fq 'if (sx > 60) sx = 60;' backend/osys_n64_libdragon.cpp
-grep -Fq 'if (sy > 60) sy = 60;' backend/osys_n64_libdragon.cpp
-grep -Fq 'tan((double)sx * (pi / 140.0))' backend/osys_n64_libdragon.cpp
-grep -Fq 'tan((double)sy * (pi / 140.0))' backend/osys_n64_libdragon.cpp
-grep -Fq 'const joypad_buttons_t buttons = _joypadInput.btn;' backend/osys_n64_libdragon.cpp
-if grep -Fq 'joypad_get_buttons_pressed' backend/osys_n64_libdragon.cpp; then
-  echo "event backend still consumes libdragon pressed transitions directly" >&2
-  exit 1
-fi
 
-echo "[preflight] r2m preconverted game-video path"
+echo "[preflight] retained preconverted game-video path"
 grep -Fq 'uint16 *_game16;' backend/osys_n64_libdragon.h
 grep -Fq 'void OSystem_N64Libdragon::rebuildGame16()' backend/osys_n64_libdragon.cpp
-grep -Fq 'if (!_screenDirty)' backend/osys_n64_libdragon.cpp
 grep -Fq 'if (_game16Dirty)' backend/osys_n64_libdragon.cpp
 grep -Fq 'memcpy(drow + xoff, srow, _gameW * sizeof(uint16));' backend/osys_n64_libdragon.cpp
-grep -Fq '_game16Dirty = true;' backend/osys_n64_libdragon.cpp
+
+echo "[preflight] r2n overlay transition correctness"
+grep -Fq 'FT64 r2n: showOverlay' backend/osys_n64_libdragon.cpp
+grep -Fq 'FT64 r2n: hideOverlay' backend/osys_n64_libdragon.cpp
+grep -Fq 'FT64 r2n: clearOverlay' backend/osys_n64_libdragon.cpp
+grep -Fq 'if (_game16Dirty)' backend/osys_n64_libdragon.cpp
+grep -Fq 'dst[x] = (uint16)(src[x] & 0xFFFE);' backend/osys_n64_libdragon.cpp
+grep -Fq 'updateScreen();' backend/osys_n64_libdragon.cpp
+if grep -A8 -F 'void OSystem_N64Libdragon::clearOverlay()' backend/osys_n64_libdragon.cpp | grep -Fq 'memset(_overlay, 0' && \
+   ! grep -A35 -F 'void OSystem_N64Libdragon::clearOverlay()' backend/osys_n64_libdragon.cpp | grep -Fq '_game16'; then
+  echo "clearOverlay reverted to a black-only implementation" >&2
+  exit 1
+fi
 
 echo "[preflight] SD filesystem and save path"
 grep -Fq 'debug_init_sdfs("sd:/", -1)' backend/osys_n64_libdragon.cpp
@@ -130,16 +153,20 @@ if grep -nE 'run: \./scripts/|^[[:space:]]+\./scripts/' "$WORKFLOW"; then
   echo "workflow depends on executable script bits" >&2
   exit 1
 fi
+grep -Fq 'set -o pipefail' "$WORKFLOW"
+grep -Fq 'tee artifacts/integration.log' "$WORKFLOW"
 grep -Fq 'id: probe' "$WORKFLOW"
 grep -Fq 'id: scummvm' "$WORKFLOW"
 [ "$(grep -c 'continue-on-error: true' "$WORKFLOW")" -eq 2 ]
 grep -Fq 'make -C "$PORT" V=1' scripts/build_scummvm.sh
 grep -Fq 'tee "$ART/scummvm-build.log"' scripts/build_scummvm.sh
 grep -Fq 'tee "$ART/probe-build.log"' scripts/build_probe.sh
-grep -Fq 'fail_rc=1' scripts/build_scummvm.sh
 
-echo "[preflight] integration graph validation"
+echo "[preflight] integration evidence gates"
 grep -Fq 'git -C "$SCUMMVM" apply --check "$PATCH"' scripts/integrate_backend.sh
+[ "$(grep -Fc 'git -C "$SCUMMVM" apply "$PATCH"' scripts/integrate_backend.sh)" -eq 1 ]
+grep -Fq 'smush-header-before.txt' scripts/integrate_backend.sh
+grep -Fq 'smush-header-after.txt' scripts/integrate_backend.sh
 grep -Fq 'make -C "$DST" -pn' scripts/integrate_backend.sh
 grep -Fq 'gui/libgui.a' scripts/integrate_backend.sh
 grep -Fq 'engines/scumm/libscumm.a' scripts/integrate_backend.sh

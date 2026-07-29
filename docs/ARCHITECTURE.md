@@ -1,4 +1,4 @@
-# r2m architecture
+# r2n architecture
 
 ## Runtime data path
 
@@ -18,37 +18,40 @@ Full Throttle
 
 No game-data payload is part of CI or the build artifact.
 
-## Video
+## Video presentation
 
-ScummVM renders its normal 8-bit CLUT game surface. The N64 backend maintains a
-second 16-bit converted surface. Rectangle updates update both surfaces while
-the palette is stable; palette changes and direct surface writes mark the
-converted surface for rebuild. `updateScreen()` copies the 16-bit surface to a
-libdragon display buffer and draws the cursor.
+ScummVM renders its normal 8-bit CLUT game surface. The N64 backend retains the
+r2m second 16-bit converted surface, so ordinary presentation is bulk copy
+rather than a full palette conversion in every `updateScreen()`.
 
-This follows the two-buffer design used by the historical official ScummVM N64
-backend while retaining libdragon display ownership.
+r2n additionally fixes fake-alpha overlay handling: `clearOverlay()` composes
+the current game frame into the overlay instead of leaving it black, and
+`hideOverlay()` immediately presents the game frame so an overlay transition
+does not depend on a later engine-driven redraw.
+
+## SMUSH timing
+
+The SCUMM v7 engine starts from pinned ScummVM 1.6.0. A single consolidated
+source patch adds the later upstream Full Throttle file-dependent SMUSH
+frame-rate logic and removes the unused predictive-input GUI object required by
+this stripped build.
+
+The patch is applied once, only after `git apply --check` succeeds against the
+exact pinned checkout. No fallback source mutation exists.
 
 ## Input
 
-libdragon reads Joybus devices asynchronously during VI. The backend
-synchronizes a cached controller state at a bounded frame cadence, applies the
-historical N64 analog-to-pointer curve to floating-point accumulated
-coordinates, and emits pointer motion every 40 ms.
-
-Digital button edges are derived from current versus retained button state,
-rather than consuming libdragon transition helpers on every ScummVM event
-poll.
+r2n retains the r2m libdragon Joypad/mouse path unchanged. Controls are not part
+of this runtime pass.
 
 ## Audio/timers
 
-r2m does not change r2l audio configuration or timer servicing. Audio remains
-22050 Hz with three libdragon buffers. The ScummVM timer manager continues to
-be serviced from normal backend execution rather than interrupt context.
+r2n does not change r2m audio configuration or timer servicing. Audio remains
+22050 Hz with three libdragon buffers. The ScummVM timer manager remains serviced
+from normal backend execution rather than interrupt context.
 
 ## Source policy
 
-ScummVM is reset to the pinned v1.6.0 commit on every build. The only upstream
-source patch is the existing one-file removal of unused AGI predictive-dialog
-code from `gui/module.mk`. The r2m runtime work lives directly in the
-`n64libdragon` backend source, not in a new mutation script or stacked patch.
+Every CI build fetches the pinned ScummVM source and pinned libdragon revision
+from scratch. Platform changes live as clean backend files. The only ScummVM
+source mutation is the single checked Git patch in `upstream/`.

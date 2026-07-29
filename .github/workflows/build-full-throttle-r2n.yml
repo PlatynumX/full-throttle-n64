@@ -1,10 +1,10 @@
-name: Build Full Throttle N64 r2m
+name: Build Full Throttle N64 r2n
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - ".github/workflows/build-full-throttle-r2m.yml"
+      - ".github/workflows/build-full-throttle-r2n.yml"
       - "backend/**"
       - "probe/**"
       - "scripts/**"
@@ -51,8 +51,11 @@ jobs:
           cat artifacts/toolchain-version.txt
           bash ./scripts/build_libdragon.sh
 
-      - name: Integrate r2m backend
-        run: bash ./scripts/integrate_backend.sh
+      - name: Integrate r2n backend
+        run: |
+          mkdir -p artifacts
+          set -o pipefail
+          bash ./scripts/integrate_backend.sh 2>&1 | tee artifacts/integration.log
 
       - name: Build standalone SummerCart SD probe
         id: probe
@@ -74,7 +77,7 @@ jobs:
             echo
             echo "Artifact files:"
             find artifacts -type f -printf '%P %s bytes\n' | sort
-          } > artifacts/r2m-summary.txt
+          } > artifacts/r2n-summary.txt
 
           if [ -d work/scummvm/.git ]; then
             git -C work/scummvm diff --check               > artifacts/scummvm-git-diff-check.txt 2>&1 || true
@@ -85,11 +88,11 @@ jobs:
             git -C work/libdragon rev-parse HEAD               > artifacts/libdragon-commit.txt || true
           fi
 
-      - name: Upload r2m ROMs and diagnostics
+      - name: Upload r2n ROMs and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: full-throttle-n64-r2m-build-report
+          name: full-throttle-n64-r2n-build-report
           path: artifacts/
           if-no-files-found: error
           retention-days: 30
@@ -99,5 +102,5 @@ jobs:
         run: |
           echo "Probe outcome: ${{ steps.probe.outcome }}"
           echo "ScummVM outcome: ${{ steps.scummvm.outcome }}"
-          echo "Both logs were preserved in the r2m build-report artifact."
+          echo "Both logs were preserved in the r2n build-report artifact."
           exit 1

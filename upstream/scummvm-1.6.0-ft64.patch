@@ -5,3 +5,196 @@ diff --git a/gui/module.mk b/gui/module.mk
  	options.o \
 -	predictivedialog.o \
  	saveload.o \
+diff --git a/engines/scumm/insane/insane.cpp b/engines/scumm/insane/insane.cpp
+--- a/engines/scumm/insane/insane.cpp
++++ b/engines/scumm/insane/insane.cpp
+@@ -854,22 +854,22 @@ int Insane::smush_changeState(int state) {
+ }
+ 
+ void Insane::queueSceneSwitch(int32 sceneId, byte *fluPtr, const char *filename,
+-							  int32 arg_C, int32 arg_10, int32 startFrame, int32 numFrames) {
++							  int32 videoFlags, int32 arg_10, int32 startFrame, int32 numFrames) {
+ 	int32 tmp;
+ 
+-	debugC(DEBUG_INSANE, "queueSceneSwitch(%d, *, %s, %d, %d, %d, %d)", sceneId, filename, arg_C, arg_10,
++	debugC(DEBUG_INSANE, "queueSceneSwitch(%d, *, %s, %d, %d, %d, %d)", sceneId, filename, videoFlags, arg_10,
+ 		  startFrame, numFrames);
+ 	if (_needSceneSwitch || _sceneData1Loaded)
+ 		return;
+ 
+ 	if (fluPtr) {
+-		tmp = ((int)startFrame/30+1)*30;
++		tmp = ((int)startFrame / 30 + 1) * 30;
+ 		if (tmp >= numFrames)
+ 			tmp = 0;
+ 
+-		smush_setupSanWithFlu(filename, arg_C|32, -1, -1, 0, fluPtr, tmp);
++		smush_setupSanWithFlu(filename, videoFlags | 32, -1, -1, 0, fluPtr, tmp);
+ 	} else {
+-		smush_setupSanFromStart(filename, arg_C|32, -1, -1, 0);
++		smush_setupSanFromStart(filename, videoFlags | 32, -1, -1, 0);
+ 	}
+ 	_needSceneSwitch = true;
+ 	_temp2SceneId = sceneId;
+@@ -877,7 +877,8 @@ void Insane::queueSceneSwitch(int32 sceneId, byte *fluPtr, const char *filename,
+ 
+ void Insane::smush_rewindCurrentSan(int arg_0, int arg_4, int arg_8) {
+ 	debugC(DEBUG_INSANE, "smush_rewindCurrentSan(%d, %d, %d)", arg_0, arg_4, arg_8);
+-	_smush_setupsan2 = arg_0;
++	_smush_curSanFlags = arg_0;
++	syncCurrentSanFlags();
+ 
+ 	smush_setupSanFile(nullptr, 0, 0);
+ 	_smush_isSanFileSetup = 1;
+@@ -1429,7 +1430,8 @@ int32 Insane::smush_setupSanWithFlu(const char *filename, int32 setupsan2, int32
+ 	if (READ_BE_UINT32(fluPtr) == MKTAG('F','L','U','P'))
+ 		tmp += 8;
+ 
+-	_smush_setupsan2 = setupsan2;
++	_smush_curSanFlags = setupsan2;
++	syncCurrentSanFlags();
+ 
+ 	if (tmp[2] <= 1) {
+ 		/* 0x300 -- palette, 0x8 -- header */
+@@ -1456,11 +1458,12 @@ int32 Insane::smush_setupSanWithFlu(const char *filename, int32 setupsan2, int32
+ 	return offset;
+ }
+ 
+-void Insane::smush_setupSanFromStart(const char *filename, int32 setupsan2, int32 step1,
++void Insane::smush_setupSanFromStart(const char *filename, int32 videoFlags, int32 step1,
+ 									 int32 step2, int32 setupsan1) {
+ 	debugC(DEBUG_INSANE, "Insane::smush_setupFromStart(%s)", filename);
+ 	_smush_setupsan1 = setupsan1;
+-	_smush_setupsan2 = setupsan2;
++	_smush_curSanFlags = videoFlags;
++	syncCurrentSanFlags();
+ 	smush_setupSanFile(filename, 0, 0);
+ 	_smush_isSanFileSetup = 1;
+ 	smush_setFrameSteps(step1, step2);
+@@ -1479,4 +1482,8 @@ void Insane::smush_setupSanFile(const char *filename, int32 offset, int32 contFr
+ 	_player->seekSan(filename, offset, contFrame);
+ }
+ 
++void Insane::syncCurrentSanFlags() {
++	_player->setCurVideoFlags(_smush_curSanFlags);
++}
++
+ }
+diff --git a/engines/scumm/insane/insane.h b/engines/scumm/insane/insane.h
+--- a/engines/scumm/insane/insane.h
++++ b/engines/scumm/insane/insane.h
+@@ -67,6 +67,7 @@ class Insane {
+ 	void escapeKeyHandler();
+ 
+ 	bool isInsaneActive() { return _insaneIsRunning; }
++	void syncCurrentSanFlags();
+ 
+  private:
+ 
+@@ -145,7 +146,7 @@ class Insane {
+ 	int _iactSceneId2;
+ 	int _smush_setupsan17;
+ 	int32 _smush_setupsan1;
+-	int16 _smush_setupsan2;
++	int16 _smush_curSanFlags;
+ 	int32 _smush_setupsan4;
+ 	int16 _smush_frameStep;
+ 	int16 _smush_curFrame;
+diff --git a/engines/scumm/scumm.cpp b/engines/scumm/scumm.cpp
+--- a/engines/scumm/scumm.cpp
++++ b/engines/scumm/scumm.cpp
+@@ -1430,10 +1430,7 @@ void ScummEngine_v7::setupScumm(const Common::String &macResourceFile) {
+ 		}
+ 	}
+ 
+-	if (_game.id == GID_DIG && (_game.features & GF_DEMO))
+-		_smushFrameRate = 15;
+-	else
+-		_smushFrameRate = (_game.id == GID_FT) ? 10 : 12;
++	_smushFrameRate = (_game.id == GID_FT) ? 10 : 12;
+ 
+ 	ScummEngine::setupScumm(macResourceFile);
+ 
+diff --git a/engines/scumm/smush/smush_player.cpp b/engines/scumm/smush/smush_player.cpp
+--- a/engines/scumm/smush/smush_player.cpp
++++ b/engines/scumm/smush/smush_player.cpp
+@@ -940,16 +940,41 @@ void SmushPlayer::handleFrame(int32 frameSize, Common::SeekableReadStream &b) {
+ void SmushPlayer::handleAnimHeader(int32 subSize, Common::SeekableReadStream &b) {
+ 	debugC(DEBUG_SMUSH, "SmushPlayer::handleAnimHeader()");
+ 	assert(subSize >= 0x300 + 6);
++	byte *headerContent = (byte *)malloc(subSize * sizeof(byte));
+ 
+-	/* _version = */ b.readUint16LE();
+-	_nbframes = b.readUint16LE();
+-	b.readUint16LE();
++	if (headerContent) {
++		// Fill out the header
++		b.read(headerContent, subSize);
+ 
+-	if (_skipPalette)
+-		return;
++		byte headerMajorVersion = headerContent[0];
++		byte headerMinorVersion = headerContent[1];
+ 
+-	readPalette(_pal, b);
+-	setDirtyColors(0, 255);
++		_nbframes = READ_LE_UINT16(&headerContent[2]);
++
++		// Video files might contain framerate overrides
++		if (_vm->_game.id == GID_FT || (_vm->_game.id == GID_DIG && _vm->_game.features & GF_DEMO)) {
++			if (headerMajorVersion > 1) {
++				uint16 speed = READ_LE_UINT16(&headerContent[6 + 0x300]);
++				if ((_curVideoFlags & 8) == 0 && speed != 0) {
++					debug(5, "SmushPlayer::handleAnimHeader(): header version %d.%d, video speed override %d fps (cur speed %d)",
++						  headerMajorVersion,
++						  headerMinorVersion,
++						  speed,
++						  _speed);
++
++					_speed = speed;
++				}
++			}
++		}
++
++		if (!_skipPalette) {
++			byte *palettePtr = &headerContent[6];
++			memcpy(_pal, palettePtr, sizeof(_pal));
++			setDirtyColors(0, 255);
++		}
++
++		free(headerContent);
++	}
+ }
+ 
+ void SmushPlayer::setupAnim(const char *file) {
+@@ -960,6 +985,10 @@ void SmushPlayer::setupAnim(const char *file) {
+ 		readString(file);
+ }
+ 
++void SmushPlayer::setCurVideoFlags(int16 flags) {
++	_curVideoFlags = flags;
++}
++
+ SmushFont *SmushPlayer::getFont(int font) {
+ 	char file_font[11];
+ 
+diff --git a/engines/scumm/smush/smush_player.h b/engines/scumm/smush/smush_player.h
+--- a/engines/scumm/smush/smush_player.h
++++ b/engines/scumm/smush/smush_player.h
+@@ -187,6 +187,8 @@ public:
+ 	void processDispatches(int16 feedSize);
+ 	bool isAudioCallbackEnabled();
+ 	byte *getVideoPalette();
++	void setCurVideoFlags(int16 flags);
++
+ 
+ protected:
+ 	int _width, _height;
+@@ -195,6 +197,7 @@ protected:
+ 	bool _paused;
+ 	uint32 _pauseStartTime;
+ 	uint32 _pauseTime;
++	int16 _curVideoFlags = 0;
+ 
+ 	void insanity(bool);
+ 	void setPalette(const byte *palette);

@@ -33,7 +33,7 @@ OSystem_N64Libdragon::OSystem_N64Libdragon()
 
     debug_init(DEBUG_FEATURE_LOG_USB | DEBUG_FEATURE_LOG_EMU);
     bool sd = debug_init_sdfs("sd:/", -1);
-    debugf("FT64 r2m: libdragon backend starting; sdfs=%d\n", sd ? 1 : 0);
+    debugf("FT64 r2n: libdragon backend starting; sdfs=%d\n", sd ? 1 : 0);
 
     display_init(RESOLUTION_320x240, DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE);
     joypad_init();
@@ -83,7 +83,7 @@ void OSystem_N64Libdragon::initBackend() {
 
     EventsBaseBackend::initBackend();
 
-    debugf("FT64 r2m: backend init complete; audio=%d Hz buffer=%d\n",
+    debugf("FT64 r2n: backend init complete; audio=%d Hz buffer=%d\n",
            audio_get_frequency(), audio_get_buffer_length());
 }
 
@@ -347,6 +347,7 @@ void OSystem_N64Libdragon::setShakePos(int shakeOffset) {
 }
 
 void OSystem_N64Libdragon::showOverlay() {
+    debugf("FT64 r2n: showOverlay\n");
     _overlayVisible = true;
     clampMouse();
     _mouseAccumX = (float)_mouseX;
@@ -355,15 +356,46 @@ void OSystem_N64Libdragon::showOverlay() {
 }
 
 void OSystem_N64Libdragon::hideOverlay() {
+    debugf("FT64 r2n: hideOverlay\n");
     _overlayVisible = false;
     clampMouse();
     _mouseAccumX = (float)_mouseX;
     _mouseAccumY = (float)_mouseY;
     _screenDirty = true;
+
+    /* The historical ScummVM N64 backend explicitly presented the game
+     * immediately when leaving overlay mode because some engines do not issue
+     * another screen update at that transition. Do the same here so the last
+     * overlay frame cannot remain on-screen indefinitely. */
+    updateScreen();
 }
 
 void OSystem_N64Libdragon::clearOverlay() {
+    /* OSystem::clearOverlay() must make the game graphics visible while the
+     * overlay remains active. This backend uses fake alpha blending, so copy
+     * the current game image into the overlay exactly as the historical N64
+     * backend did instead of clearing the overlay to black. */
+    debugf("FT64 r2n: clearOverlay\n");
+
+    if (_game16Dirty)
+        rebuildGame16();
+
     memset(_overlay, 0, kScreenW * kScreenH * sizeof(uint16));
+
+    if (_game16) {
+        const int xoff = (kScreenW - _gameW) / 2;
+        const int yoff = (kScreenH - _gameH) / 2;
+        const int srcStartY = std::min<int>(std::max<int>(_shake, 0), _gameH);
+        const int visibleH = _gameH - srcStartY;
+
+        for (int y = 0; y < visibleH; ++y) {
+            const uint16 *src = _game16 + (srcStartY + y) * _gameW;
+            uint16 *dst = _overlay + (yoff + y) * kScreenW + xoff;
+            for (int x = 0; x < _gameW; ++x)
+                dst[x] = (uint16)(src[x] & 0xFFFE); // ScummVM RGB555 overlay format
+        }
+    }
+
     _screenDirty = true;
 }
 
@@ -592,7 +624,7 @@ void OSystem_N64Libdragon::unlockMutex(MutexRef mutex) { (void)mutex; }
 void OSystem_N64Libdragon::deleteMutex(MutexRef mutex) { (void)mutex; }
 
 void OSystem_N64Libdragon::quit() {
-    debugf("FT64 r2m: quit requested\n");
+    debugf("FT64 r2n: quit requested\n");
 }
 
 Common::String OSystem_N64Libdragon::getDefaultConfigFileName() {

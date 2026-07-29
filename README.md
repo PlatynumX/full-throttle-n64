@@ -1,100 +1,106 @@
-# Full Throttle N64 r2m
+# Full Throttle N64 r2n
 
 Full Throttle-only ScummVM 1.6.0 port for Nintendo 64, using libdragon and
 SummerCart SD storage.
 
-## Baseline
+## Hardware baseline
 
-r2l built successfully and booted on real N64 hardware with an Expansion Pak.
-The SummerCart SD filesystem mounted and Full Throttle reached the opening
-SMUSH movie. Hardware testing then exposed two runtime issues:
+r2m builds and runs on a real N64 with an Expansion Pak. Full Throttle launches
+from `sd:/fullthrottle/`, the opening SMUSH movie plays, and gameplay is reached.
+The latest hardware test reports two remaining runtime problems:
 
-1. opening movie playback stutters;
-2. the analog stick does not behave correctly as the mouse.
+1. SMUSH video is still choppy;
+2. leaving the initial gameplay screen can transition to a black screen.
 
-r2m changes only the platform backend paths directly related to those two
-observations. It does not change the Full Throttle engine, game scripts, audio
-buffer count, filesystem implementation, or the existing ScummVM 1.6.0 GUI
-module patch.
+r2n changes only those two areas. Controls, SD filesystem behavior, save paths,
+audio configuration, and the r2m preconverted game framebuffer remain otherwise
+unchanged.
 
-## r2m input change
+## Black-screen transition fix
 
-The historical official ScummVM N64 backend used the N64 analog stick as mouse
-movement. It sampled analog movement at display cadence into floating-point
-temporary mouse coordinates and emitted mouse movement at a bounded 40 ms
-interval.
+ScummVM's overlay contract says `clearOverlay()` must leave the game graphics
+visible while overlay mode is active. A backend without real alpha blending is
+expected to achieve that by copying the current game image into its overlay.
+The historical ScummVM N64 backend does exactly that.
 
-r2m follows that established behavior using libdragon's Joypad subsystem:
+r2m instead zeroed the entire overlay buffer, producing a black overlay.
 
-- libdragon continues reading controllers asynchronously from VI;
-- `joypad_poll()` synchronizes state at a bounded frame cadence rather than on
-  every ScummVM `pollEvent()` drain;
-- analog X/Y is clamped to +/-60;
-- the historical tangent acceleration curve is retained;
-- accumulated pointer motion is emitted every 40 ms;
-- button edges are compared against retained button state, so repeated event
-  polling does not consume libdragon pressed/released transitions prematurely.
+r2n therefore:
 
-Controls remain:
+- rebuilds the converted game frame when necessary;
+- clears only the unused overlay area;
+- copies the current game frame into the overlay in ScummVM's N64 RGB555 layout;
+- marks the display dirty;
+- immediately presents the game frame when `hideOverlay()` is called, matching
+  the historical N64 backend's explicit protection for games that do not issue
+  another screen update when leaving an overlay;
+- emits USB/emulator debug messages for `showOverlay`, `clearOverlay`, and
+  `hideOverlay` so a remaining transition failure can be tied to the exact
+  runtime path instead of guessed at.
 
-- Analog stick: mouse
-- Z: left click
-- B: right click
-- Start: F5 menu
-- L: Escape
-- A: period / skip
+## SMUSH timing backport
 
-## r2m video change
+ScummVM upstream commit:
 
-r2l converted every 8-bit game pixel through the palette again during every
-screen presentation.
+```text
+9e7e6a08b276ebe5dfdbc79e9a9fc2edcfd12bf8
+SCUMM: INSANE/SMUSH: Implement video file dependent frame rate
+```
 
-The historical N64 backend instead kept both the palettized game buffer and a
-preconverted 16-bit N64 buffer. `copyRectToScreen()` updated that converted
-buffer when pixels changed, palette changes invalidated it, and `updateScreen()`
-mostly copied already-converted pixels to the framebuffer.
+states that Full Throttle video files contain their correct frame rate in the
+FLU header and that using it fixes ScummVM bug #14029. ScummVM 2.7.0 release
+notes subsequently describe SMUSH timing fixes mostly affecting Full Throttle.
 
-r2m restores that architecture in the libdragon backend:
+r2n carries that upstream source logic together with the already-required
+`gui/predictivedialog.o` removal in **one consolidated Git patch**. There is no
+second patcher and no sed/regex fallback.
 
-- `_game` remains ScummVM's 8-bit CLUT surface;
-- `_game16` stores the converted RGBA5551 frame;
-- ordinary rectangle updates update the converted pixels once;
-- palette/direct-surface changes trigger a rebuild before presentation;
-- clean frames are not presented again;
-- presentation uses row copies instead of a full-screen per-pixel palette
-  conversion.
+The exact local environment used to create this package cannot fetch the pinned
+ScummVM checkout, so this package does **not** claim the 2023 patch hunks have
+already been proven applicable to the 2013 source. GitHub CI enforces that proof
+before compilation:
 
-This is a targeted backend optimization based on the historical N64 port. It is
-not yet claimed to eliminate the observed SMUSH stutter; hardware testing is
-the authority.
+```text
+git apply --check
+```
+
+against exactly:
+
+```text
+f75a652bb7c956f145abe881c87b5dbf5c9ec24b
+```
+
+If any source context differs, integration stops before the compiler runs and
+the artifact preserves the pristine source neighborhoods plus `integration.log`.
+There is deliberately no fuzzy fallback.
 
 ## Game data
 
 No Full Throttle game or demo data is downloaded, embedded, staged, or uploaded
 by this repository.
 
-The ROM expects the user's existing files at:
+The ROM expects the existing game data at:
 
 ```text
 sd:/fullthrottle/
 ```
 
-The save manager expects this directory to already exist:
+and saves at:
 
 ```text
 sd:/fullthrottle/saves/
 ```
 
-## Build
+## Build output
 
-GitHub Actions fetches only the pinned source/toolchain dependencies, then builds:
+GitHub Actions builds:
 
 ```text
 ft64-sd-probe.z64
-full-throttle-n64-r2m.z64
+full-throttle-n64-r2n.z64
 ```
 
 The build artifact contains ROMs and diagnostics only.
 
-See `TERMUX.md` for the Android/Termux publish command and `docs/EVIDENCE.md`
-for the exact upstream behavior used for the r2m changes.
+See `TERMUX.md` for the Android publish commands and `docs/EVIDENCE.md` for the
+source evidence behind the two r2n changes.

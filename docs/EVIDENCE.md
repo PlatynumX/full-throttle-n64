@@ -1,83 +1,119 @@
-# Evidence / design notes — r2m
+# Evidence / design notes — r2n
 
 ## Hardware observation
 
-The r2l ROM built and booted on real Nintendo 64 hardware with an Expansion
-Pak and SummerCart. Full Throttle loaded from `sd:/fullthrottle/` and began
-playing its opening movie. Hardware testing then reported:
+The r2m ROM runs on real Nintendo 64 hardware with an Expansion Pak and
+SummerCart. Full Throttle loads from `sd:/fullthrottle/`, plays the opening
+SMUSH video, and reaches gameplay.
 
-- SMUSH movie playback stutters.
-- The analog stick does not appear to act as the mouse.
+The current hardware observations are:
 
-Those observations are the reason for the r2m runtime pass. r2m does not claim
-either issue is solved until another hardware test confirms it.
+- SMUSH video remains choppy.
+- Transitioning away from the initial gameplay screen can leave a black screen.
 
-## Historical ScummVM N64 analog behavior
+Those are the only runtime problems targeted by r2n. Hardware retesting remains
+the authority on whether either issue is resolved.
 
-Pinned reference:
-https://raw.githubusercontent.com/scummvm/scummvm/v1.6.0/backends/platform/n64/osys_n64_events.cpp
+## Overlay contract and historical N64 behavior
 
-The official N64 backend:
+ScummVM's OSystem overlay documentation says that after `clearOverlay()` while
+overlay mode is active, only the game graphics should be visible. For fake
+alpha blending, the documented method is to copy the current game graphics into
+the overlay.
 
-- defines `PAD_DEADZONE` as 1 and `PAD_CHECK_TIME` as 40 ms;
-- clamps pad analog X/Y to +/-60;
-- accumulates movement with `tan(axis * (M_PI / 140))`;
-- keeps temporary floating-point mouse coordinates;
-- emits the accumulated position as `EVENT_MOUSEMOVE` on the bounded
-  `PAD_CHECK_TIME` cadence.
+Current API documentation:
 
-Its VI callback calls `readControllerAnalogInput()`:
+https://doxygen.scummvm.org/da/da9/group__common__system__overlay.html
 
-https://raw.githubusercontent.com/scummvm/scummvm/v1.6.0/backends/platform/n64/osys_n64_utilities.cpp
+The pinned ScummVM 1.6.0 N64 backend implements that behavior directly in
+`clearOverlay()` by clearing the overlay buffer and then copying the current
+high-color game buffer into it:
 
-## Pinned libdragon input contract
-
-Pinned libdragon commit:
-`35f85a0797324a5ed0c723203e33ab3c1da94fdd`
-
-Header:
-https://raw.githubusercontent.com/DragonMinded/libdragon/35f85a0797324a5ed0c723203e33ab3c1da94fdd/include/joypad.h
-
-The Joypad subsystem starts reading controllers during VI interrupt.
-`joypad_poll()` synchronizes the asynchronously-read state and is intended to
-be called once per frame. `joypad_inputs_t` exposes signed `stick_x` and
-`stick_y`, with healthy OEM N64 controllers typically reaching roughly
-+/-85.
-
-r2m therefore does not invent a new controller model: it combines libdragon's
-VI-backed state with the timing/curve behavior already used by ScummVM's
-historical N64 port.
-
-## Historical ScummVM N64 video behavior
-
-Pinned reference:
 https://raw.githubusercontent.com/scummvm/scummvm/v1.6.0/backends/platform/n64/osys_n64_base.cpp
 
-The historical backend allocates both an 8-bit palettized offscreen buffer and
-a 16-bit high-color offscreen buffer. `copyRectToScreen()` updates converted
-pixels as the palettized pixels change. A palette change marks the converted
-buffer for rebuild. `updateScreen()` skips clean frames and copies the
-preconverted high-color image to the framebuffer in bulk.
+That same historical backend's `hideOverlay()` explicitly forces a screen
+presentation because some games may not update the screen themselves when the
+overlay is disabled.
 
-r2l instead performed the palette lookup for every displayed game pixel inside
-every dirty `updateScreen()`. r2m moves back to the historical two-buffer
-shape, while using libdragon surfaces and display buffers.
+r2m violated the first requirement by making `clearOverlay()` a black-buffer
+clear only. r2n restores the fake-alpha behavior and performs an immediate game
+presentation from `hideOverlay()`.
 
-## Later ScummVM evidence
+The r2n game buffer is libdragon RGBA5551. ScummVM 1.6.0's `ColorMasks<555>`
+has an N64-specific layout with red at bit 11, green at bit 6, blue at bit 1,
+and the low bit unused. Therefore copying the converted game pixel into the
+overlay while clearing bit 0 preserves the color bits and yields the format
+advertised by `getOverlayFormat()`.
 
-ScummVM 2.7.0 release notes say the project later fixed minor SMUSH timing
-issues, mostly affecting Full Throttle, and added a low-latency audio mode for
-Full Throttle/The Dig/COMI:
+Pinned color-mask source:
+
+https://raw.githubusercontent.com/scummvm/scummvm/v1.6.0/graphics/colormasks.h
+
+## Full Throttle SMUSH frame-rate evidence
+
+ScummVM upstream commit:
+
+```text
+9e7e6a08b276ebe5dfdbc79e9a9fc2edcfd12bf8
+SCUMM: INSANE/SMUSH: Implement video file dependent frame rate
+```
+
+was committed on 2023-01-15. Its commit message says:
+
+```text
+In FT and DIG demo, video files have the correct frame rate encoded in the FLU header.
+This fixes bug #14029.
+```
+
+Commit record and diff:
+
+https://lists.scummvm.org/pipermail/scummvm-git-logs/2023-January/097937.html
+
+The upstream change reads the video speed from the AHDR/FLU header for Full
+Throttle, tracks the current INSANE/SMUSH video flags, and uses the encoded
+speed when the flags permit it.
+
+ScummVM 2.7.0 release notes separately state that minor SMUSH timing issues were
+fixed, mostly affecting Full Throttle:
 
 https://docs.scummvm.org/en/v2.7.0/help/release.html
 
-Those later engine changes are noted as a possible next investigation if the
-backend presentation optimization is insufficient. They are deliberately NOT
-backported in r2m because their exact source changes have not yet been isolated
-and validated against the pinned 1.6.0 codebase.
+The same release also introduced a low-latency audio mode. r2n does **not**
+enable or backport that audio mode: it is a separate behavior and is not needed
+to test the identified frame-rate correction.
+
+## Backport verification policy
+
+The exact ScummVM build source remains pinned to:
+
+```text
+f75a652bb7c956f145abe881c87b5dbf5c9ec24b
+```
+
+The r2n project contains one consolidated source patch covering:
+
+- `gui/module.mk` — the already-established removal of unused
+  `predictivedialog.o`;
+- the five SCUMM files changed by upstream frame-rate commit
+  `9e7e6a08b276ebe5dfdbc79e9a9fc2edcfd12bf8`.
+
+The packaging environment could verify the patch format and exact intended path
+set, but could not retrieve the pinned source checkout. Therefore compatibility
+with ScummVM 1.6.0 is **not asserted locally**.
+
+CI first records relevant pristine source excerpts and then runs exactly one:
+
+```text
+git apply --check upstream/scummvm-1.6.0-ft64.patch
+git apply upstream/scummvm-1.6.0-ft64.patch
+```
+
+If the check fails, there is no automatic rewrite, fuzzy application, sed
+mutation, or fallback patch. The build report keeps `integration.log` and the
+pristine excerpts so the next source change can be based on the actual pinned
+code.
 
 ## No game/demo packaging
 
-r2m does not fetch, stage, archive, or upload Full Throttle data. Hardware uses
-the user's existing `sd:/fullthrottle/` directory. This removes the now
-unnecessary large data transfer from CI without changing the runtime data path.
+r2n does not fetch, stage, archive, or upload Full Throttle data. Hardware uses
+the existing `sd:/fullthrottle/` directory.
