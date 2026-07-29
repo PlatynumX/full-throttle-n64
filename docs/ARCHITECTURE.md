@@ -1,68 +1,46 @@
-# r2f architecture
+# r2g architecture
 
-## Engine side
-
-Pinned initial baseline:
-
-* ScummVM 1.6.0
-* SCUMM engine enabled
-* SCUMM v7/v8 subengine enabled
-
-That subengine brings the Full Throttle-required SCUMM v7 code paths, including
-the SMUSH/INSANE/iMUSE Digital objects selected by ScummVM's own build rules.
-
-## Platform side
-
-Historical N64 dependencies are not used:
+## Engine
 
 ```text
-hkz-libn64              REMOVED
-romfs game payload      REMOVED
-pakfs save manager      REMOVED
-framfs save manager     REMOVED
+ScummVM 1.6.0 @ f75a652bb7c956f145abe881c87b5dbf5c9ec24b
+    |
+    +-- SCUMM
+         +-- SCUMM v7/v8
+              +-- SMUSH
+              +-- INSANE
+              +-- iMUSE Digital
 ```
 
-New platform path:
+The build is intentionally Full Throttle-only. It is not an attempt to restore every ScummVM engine on N64.
+
+## Platform
 
 ```text
-ScummVM 1.6.0
-   |
-   +-- SCUMM v7 / Full Throttle
-   |
-   +-- OSystem_N64Libdragon
-         |
-         +-- display: libdragon 320x240 / RGBA5551
-         +-- audio:   libdragon AI buffers
-         +-- input:   libdragon joypad
-         +-- timer:   libdragon COP0 timer
-         +-- files:   ScummVM POSIX filesystem node over Newlib
-         +-- saves:   DefaultSaveFileManager("sd:/fullthrottle/saves")
-         +-- logs:    libdragon emulator/USB debug
+OSystem_N64Libdragon
+    |
+    +-- video: 320x240 libdragon display, 16-bit output
+    +-- audio: libdragon audio buffers
+    +-- input: libdragon joypad
+    +-- timer: libdragon tick source, ScummVM timer manager pumped outside IRQ context
+    +-- files: native N64LibdragonFilesystemNode + libdragon dir API
+    +-- streams: stdio over mounted sd:/
+    +-- saves: sd:/fullthrottle/saves/
+    +-- debug: libdragon USB/emulator logging
 ```
 
-## Why a standalone probe exists
+## Source integration
 
-A backend migration has two independent unknowns:
+Every build fetches a pristine pinned ScummVM tree. Complete platform source files are copied from `backend/` into a new `backends/platform/n64libdragon/` directory.
 
-1. Can current libdragon on the user's SummerCart mount and use the SD card the
-   way we expect?
-2. Can a 2013 ScummVM tree be made to compile/link cleanly against a current
-   GCC/Newlib/libdragon platform?
+One upstream patch removes the AGI-only predictive-input object from `gui/module.mk` before module archive rules are created. The generated make database is audited before compilation.
 
-`ft64-sd-probe.z64` answers #1 without depending on #2.
+## Standalone probe
 
-The probe:
-* initializes 320x240 video;
-* initializes a controller;
-* mounts `sd:/`;
-* reads `sd:/fullthrottle/`;
-* creates/writes/reads `sd:/fullthrottle/ft64-r2f-probe.txt`;
-* initializes the audio subsystem;
-* reports status on screen and through debug output.
+`ft64-sd-probe.z64` proves the hardware/platform layer independently. It initializes video, controller and audio, mounts `sd:/`, enumerates `sd:/fullthrottle/`, and performs a file write/read test in the existing directory.
 
-## First performance risks after boot
+This lets us distinguish a SummerCart/libdragon failure from a ScummVM engine/backend failure.
 
-The backend itself is not expected to be the hard part. Full Throttle's SCUMM
-v7 workload includes SMUSH video, INSANE bike sequences and iMUSE Digital
-audio. Once the demo boots, those become measurement targets rather than
-speculation.
+## First runtime risks after a successful link
+
+Once the demo boots, the next unknowns become measured runtime behavior rather than build speculation: SMUSH decoding throughput, iMUSE Digital mixing load, INSANE sequences, memory pressure, SD streaming behavior and save/load behavior.

@@ -1,75 +1,97 @@
-# Evidence / design notes
+# Evidence / design notes — r2g
 
-This file records why r2f is structured this way.
+## Pinned sources
 
-## ScummVM baseline
+ScummVM is pinned to tag `v1.6.0`, resolved and checked against commit:
 
-ScummVM 1.6.0's SCUMM module has a separate `ENABLE_SCUMM_7_8` build gate.
-That gate selects the v7/v8 pieces used by Full Throttle, including SMUSH,
-INSANE, and iMUSE Digital.
+```text
+f75a652bb7c956f145abe881c87b5dbf5c9ec24b
+```
 
-The historical N64 Makefile is not a normal configure build and is tied to
-`hkz-libn64`, its old MIPS toolchain path, ROMFS, PakFS and FRAMFS.
+libdragon is pinned to:
 
-r2f therefore does not mutate that backend in place. It adds a separate
-`n64libdragon` platform backend and leaves the old backend untouched as
-reference material.
+```text
+35f85a0797324a5ed0c723203e33ab3c1da94fdd
+```
 
-## libdragon baseline
+The build refuses to continue if the fetched ScummVM tag resolves to any other commit.
 
-r2f targets libdragon stable `trunk` but pins the tested source snapshot to commit `35f85a0797324a5ed0c723203e33ab3c1da94fdd` (2026-07-15).
+## Full Throttle engine scope
 
-The current libdragon build system:
-* targets `mips64-elf` / VR4300 with the o64 ABI;
-* supplies the linker script and N64 ROM packaging tools;
-* has current display, audio, joypad, timer and debug APIs;
-* exposes SD-backed files through Newlib-style file APIs.
+ScummVM 1.6.0's SCUMM module has a separate `ENABLE_SCUMM_7_8` gate. That gate adds the v7/v8 objects used by Full Throttle, including iMUSE Digital, INSANE and SMUSH.
 
-## POSIX filesystem bridge
+The N64 target enables only:
 
-ScummVM 1.6.0 already has a POSIX filesystem implementation using
-`stat`, `opendir`, `readdir` and stdio streams.
+```makefile
+ENABLE_SCUMM := STATIC_PLUGIN
+ENABLE_SCUMM_7_8 := STATIC_PLUGIN
+```
 
-libdragon's Newlib integration provides the C/POSIX file layer. r2f therefore
-reuses ScummVM's POSIX node implementation with a narrow compile guard
-(`N64_LIBDRAGON`) instead of writing another ScummVM filesystem class.
+AGI is not enabled.
 
-This is the smallest architecture change that lets ScummVM see `sd:/`.
+## Why r2f repeated the predictive-dialog error
 
+The r2e/r2f compiler reached `gui/predictivedialog.cpp` and modern GCC rejected a legacy conversion in that source.
 
-## Upstream references
+r2f attempted to remove `gui/predictivedialog.o` from top-level `OBJS` after including `Makefile.common`. That could not work.
 
-* ScummVM 1.6.0 N64 Makefile: https://github.com/scummvm/scummvm/blob/v1.6.0/backends/platform/n64/Makefile
-* ScummVM 1.6.0 engine gates: https://github.com/scummvm/scummvm/blob/v1.6.0/engines/engines.mk
-* libdragon pinned commit: https://github.com/DragonMinded/libdragon/commit/35f85a0797324a5ed0c723203e33ab3c1da94fdd
-* libdragon SD/debug API: https://libdragon.dev/ref/debug_8h.html
-* official Full Throttle demo listing: https://sourceforge.net/projects/scummvm/files/demos/scumm/
+ScummVM 1.6.0 `Makefile.common` first includes every module's `module.mk`. `rules.mk` then transforms each static module's object list into a module archive and appends the archive to top-level `OBJS`:
 
-## r2f implementation checks
+```text
+gui/*.o -> gui/libgui.a -> top-level OBJS
+```
 
-* The Full Throttle executable calls `assert_memory_expanded()` before creating the ScummVM backend; the standalone probe reports both Expansion Pak state and total RAM without halting.
-* ScummVM 1.6.0 uses the N64-specific 555 color masks with R/G/B at bits 11/6/1, which already matches libdragon RGBA5551 color placement. The overlay path therefore preserves the 15 color bits and sets bit 0 opaque instead of shifting the pixel.
-* The current libdragon build defaults to C++17; r2f filters that default and builds the 2013 ScummVM code as GNU++11 to reduce avoidable language-version breakage.
+By the time the r2f filter ran, `gui/predictivedialog.o` had already become a prerequisite of `gui/libgui.a`. The r2f filter is removed entirely in r2g.
 
-## CI evidence incorporated in this revision
+## r2g source change
 
-The previous GitHub build established two concrete compatibility facts:
+r2g always starts with the pristine pinned ScummVM tree and applies exactly one normal Git patch:
 
-* The standalone probe compiled and linked to an ELF and reached ROM packaging. `ed64romconfig` then rejected `--controller1 joypad`; its own usage output identifies `n64` as the plain Nintendo 64 controller value. Both ROM makefiles therefore use `N64_ROM_CONTROLLER1=n64`.
-* The ScummVM build reached the new backend and failed because ScummVM 1.6.0 `Graphics::Surface` has the public `pixels` member rather than the newer `getPixels()` accessor. The screen-clear path now uses `_game.pixels`.
+```text
+upstream/scummvm-1.6.0-ft64.patch
+```
 
-Both facts are enforced by `scripts/preflight.sh` so neither regression can silently return.
+That patch removes `predictivedialog.o` from `gui/module.mk` before `Makefile.common` constructs the GUI archive rule. It does not edit `predictivedialog.cpp` and does not use `sed`, regex replacement, or a chain of generated patchers.
 
-## r2f: SCUMM engine include-root correction
+`git apply --check` must pass before the source is changed.
 
-The r2d CI build reached the SCUMM engine and failed at `engines/scumm/actor.cpp`
-with `fatal error: scumm/scumm.h: No such file or directory`. This is a build-root
-issue, not a missing source file. ScummVM 1.6.0's historical N64 Makefile used
-`-I./ -I$(srcdir) -I$(srcdir)/engines`; r2f restores that source-layout contract
-through `INCLUDES`, which `Makefile.common` folds into `CPPFLAGS`. r2f also stops
-manually injecting `$(DEFINES)` into CFLAGS/CXXFLAGS because `Makefile.common`
-already does that.
+## Dependency-graph proof
 
-## r2f: predictive dialog compile failure
+After integration and before compilation, r2g runs `make -pn` against the actual pinned ScummVM + libdragon Makefile and records the generated make database.
 
-The r2e CI reached the ScummVM GUI and failed in `gui/predictivedialog.cpp` at the legacy predictive dictionary code (`invalid conversion from 'char' to 'char *'`). This dialog is for AGI predictive keyboard input and is unrelated to Full Throttle. The r2f target therefore filters `gui/predictivedialog.o` from `OBJS` after `Makefile.common` assembles the module list. No upstream ScummVM source file is edited. The target continues to enable only SCUMM and SCUMM v7/v8.
+The build is stopped unless:
+
+* `gui/libgui.a` exists in that database and has no `gui/predictivedialog.o` prerequisite;
+* `engines/scumm/libscumm.a` contains `engines/scumm/insane/insane.o`;
+* it contains `engines/scumm/smush/smush_player.o`;
+* it contains `engines/scumm/imuse_digi/dimuse.o`.
+
+This is the guard that r2f was missing.
+
+## Prior compiler-proven corrections retained
+
+Earlier CI runs established:
+
+* libdragon ROM metadata uses `N64_ROM_CONTROLLER1=n64`, not `joypad`;
+* ScummVM 1.6.0 `Graphics::Surface` uses the public `pixels` member rather than `getPixels()`;
+* SCUMM sources expect the `engines/` include root so `scumm/scumm.h` resolves;
+* the pinned libdragon toolchain does not provide POSIX `<dirent.h>`, so the backend uses libdragon's native directory API;
+* the mounted FAT adapter does not provide runtime directory creation, so `saves/` is staged in the SD payload.
+
+Each retained correction has a preflight regression guard.
+
+## Filesystem architecture
+
+The backend supplies `N64LibdragonFilesystemNode` rather than ScummVM's POSIX filesystem implementation. Directory enumeration uses:
+
+```text
+dir_t
+dir_findfirst()
+dir_findnext()
+```
+
+File streams use ScummVM `StdioStream` over libdragon/Newlib after `sd:/` is mounted.
+
+## Historical N64 backend
+
+The old ScummVM N64 backend remains useful reference material but is not linked into this target. r2g does not use hkz-libn64, ROMFS, PakFS or FRAMFS.

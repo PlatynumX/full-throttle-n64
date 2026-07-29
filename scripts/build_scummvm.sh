@@ -12,13 +12,18 @@ make -C "$PORT" V=1 -j"$(nproc)" 2>&1 | tee "$ART/scummvm-build.log"
 rc=${PIPESTATUS[0]}
 set -e
 
-if [ "$rc" -eq 0 ] && [ -f "$PORT/full-throttle-n64-r2f.z64" ]; then
-  cp "$PORT/full-throttle-n64-r2f.z64" "$ART/full-throttle-n64-r2f.z64"
-  sha256sum "$ART/full-throttle-n64-r2f.z64" > "$ART/full-throttle-n64-r2f.sha256"
+if [ "$rc" -eq 0 ] && [ -f "$PORT/full-throttle-n64-r2g.z64" ]; then
+  cp "$PORT/full-throttle-n64-r2g.z64" "$ART/full-throttle-n64-r2g.z64"
+  sha256sum "$ART/full-throttle-n64-r2g.z64" > "$ART/full-throttle-n64-r2g.sha256"
   printf 'PASS\n' > "$ART/scummvm-build-status.txt"
 else
-  printf 'FAIL rc=%s\n' "$rc" > "$ART/scummvm-build-status.txt"
+  fail_rc="$rc"
+  if [ "$fail_rc" -eq 0 ]; then
+    # A successful make without the declared ROM is still a failed build.
+    fail_rc=1
+  fi
+  printf 'FAIL rc=%s\n' "$fail_rc" > "$ART/scummvm-build-status.txt"
   # Preserve diagnostics, but return failure so the workflow accurately shows
-  # whether the integration ROM built.
-  exit "$rc"
+  # whether the integration ROM was actually produced.
+  exit "$fail_rc"
 fi

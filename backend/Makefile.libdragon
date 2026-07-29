@@ -1,4 +1,4 @@
-# Full Throttle N64 r2f
+# Full Throttle N64 r2g
 # ScummVM 1.6.0 + new libdragon backend.
 
 srcdir := ../../..
@@ -17,7 +17,7 @@ N64_CFLAGS := $(filter-out -Werror,$(N64_CFLAGS))
 N64_CXXFLAGS := $(filter-out -Werror -std=gnu++17,$(N64_CXXFLAGS)) -std=gnu++11
 
 # n64.mk defines defaults, so project-specific metadata must follow the include.
-N64_ROM_TITLE := Full Throttle N64 r2f
+N64_ROM_TITLE := Full Throttle N64 r2g
 N64_ROM_REGIONFREE := true
 N64_ROM_CONTROLLER1 := n64
 
@@ -67,13 +67,7 @@ OBJS := \
 
 include $(srcdir)/Makefile.common
 
-# Full Throttle does not use the AGI predictive-input dialog. ScummVM 1.6.0
-# predictivedialog.cpp contains code rejected by the modern libdragon GCC, so
-# keep this Full-Throttle-only target lean and omit that unrelated GUI object.
-# This is a target-local object filter; upstream ScummVM source is left intact.
-OBJS := $(filter-out gui/predictivedialog.o,$(OBJS))
-
-TARGET := full-throttle-n64-r2f
+TARGET := full-throttle-n64-r2g
 
 all: $(TARGET).z64
 

@@ -1,0 +1,7 @@
+diff --git a/gui/module.mk b/gui/module.mk
+--- a/gui/module.mk
++++ b/gui/module.mk
+@@ -18,3 +18,2 @@ MODULE_OBJS := \
+ 	options.o \
+-	predictivedialog.o \
+ 	saveload.o \
