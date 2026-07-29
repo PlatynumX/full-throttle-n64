@@ -1,4 +1,4 @@
-# Evidence / design notes — r2n
+# Evidence / design notes — r2o
 
 ## Hardware observation
 
@@ -11,7 +11,7 @@ The current hardware observations are:
 - SMUSH video remains choppy.
 - Transitioning away from the initial gameplay screen can leave a black screen.
 
-Those are the only runtime problems targeted by r2n. Hardware retesting remains
+Those are the only runtime problems targeted by r2o. Hardware retesting remains
 the authority on whether either issue is resolved.
 
 ## Overlay contract and historical N64 behavior
@@ -36,10 +36,10 @@ presentation because some games may not update the screen themselves when the
 overlay is disabled.
 
 r2m violated the first requirement by making `clearOverlay()` a black-buffer
-clear only. r2n restores the fake-alpha behavior and performs an immediate game
+clear only. r2o restores the fake-alpha behavior and performs an immediate game
 presentation from `hideOverlay()`.
 
-The r2n game buffer is libdragon RGBA5551. ScummVM 1.6.0's `ColorMasks<555>`
+The r2o game buffer is libdragon RGBA5551. ScummVM 1.6.0's `ColorMasks<555>`
 has an N64-specific layout with red at bit 11, green at bit 6, blue at bit 1,
 and the low bit unused. Therefore copying the converted game pixel into the
 overlay while clearing bit 0 preserves the color bits and yields the format
@@ -78,7 +78,7 @@ fixed, mostly affecting Full Throttle:
 
 https://docs.scummvm.org/en/v2.7.0/help/release.html
 
-The same release also introduced a low-latency audio mode. r2n does **not**
+The same release also introduced a low-latency audio mode. r2o does **not**
 enable or backport that audio mode: it is a separate behavior and is not needed
 to test the identified frame-rate correction.
 
@@ -90,30 +90,46 @@ The exact ScummVM build source remains pinned to:
 f75a652bb7c956f145abe881c87b5dbf5c9ec24b
 ```
 
-The r2n project contains one consolidated source patch covering:
+After r2n failed before compilation, the pinned 1.6.0 source was inspected
+directly. In that source, `SmushPlayer` does **not** contain the newer
+`getVideoPalette()` / `processDispatches()` public-method block used by the
+2023 patch, so the upstream hunk could not legitimately be copied verbatim.
+The pinned header instead has `play()`, `release()`, and `warpMouse()` followed
+immediately by `protected:`.
 
-- `gui/module.mk` — the already-established removal of unused
-  `predictivedialog.o`;
-- the five SCUMM files changed by upstream frame-rate commit
-  `9e7e6a08b276ebe5dfdbc79e9a9fc2edcfd12bf8`.
+Pinned files inspected:
 
-The packaging environment could verify the patch format and exact intended path
-set, but could not retrieve the pinned source checkout. Therefore compatibility
-with ScummVM 1.6.0 is **not asserted locally**.
+- https://raw.githubusercontent.com/scummvm/scummvm/f75a652bb7c956f145abe881c87b5dbf5c9ec24b/engines/scumm/smush/smush_player.h
+- https://raw.githubusercontent.com/scummvm/scummvm/f75a652bb7c956f145abe881c87b5dbf5c9ec24b/engines/scumm/smush/smush_player.cpp
+- https://raw.githubusercontent.com/scummvm/scummvm/f75a652bb7c956f145abe881c87b5dbf5c9ec24b/engines/scumm/insane/insane.cpp
 
-CI first records relevant pristine source excerpts and then runs exactly one:
+r2o therefore uses a minimal source-level adaptation of the upstream behavior
+to the verified 1.6.0 layout:
+
+- keep 1.6.0's existing `_smush_setupsan2` field rather than renaming it;
+- synchronize that existing value into `SmushPlayer` at the three points where
+  1.6.0 sets/rewinds the current SAN flags;
+- add `_curVideoFlags` and `setCurVideoFlags()` to the actual 1.6.0
+  `SmushPlayer` class layout;
+- read the AHDR into a temporary buffer and apply the upstream Full Throttle
+  frame-rate override when the header/version/flags permit it;
+- leave `scumm.cpp` untouched because pinned 1.6.0 already uses 10 fps as Full
+  Throttle's default and the upstream `scumm.cpp` change only removes a DIG-demo
+  special case.
+
+Together with the established GUI object removal, that is one consolidated Git
+patch touching exactly four files. CI first copies those exact pristine files
+into the diagnostic artifact, then runs exactly one:
 
 ```text
 git apply --check upstream/scummvm-1.6.0-ft64.patch
 git apply upstream/scummvm-1.6.0-ft64.patch
 ```
 
-If the check fails, there is no automatic rewrite, fuzzy application, sed
-mutation, or fallback patch. The build report keeps `integration.log` and the
-pristine excerpts so the next source change can be based on the actual pinned
-code.
+There is no fuzzy application, source rewriting fallback, sed mutation, or
+second patch.
 
 ## No game/demo packaging
 
-r2n does not fetch, stage, archive, or upload Full Throttle data. Hardware uses
+r2o does not fetch, stage, archive, or upload Full Throttle data. Hardware uses
 the existing `sd:/fullthrottle/` directory.

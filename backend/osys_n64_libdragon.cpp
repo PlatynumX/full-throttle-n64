@@ -33,7 +33,7 @@ OSystem_N64Libdragon::OSystem_N64Libdragon()
 
     debug_init(DEBUG_FEATURE_LOG_USB | DEBUG_FEATURE_LOG_EMU);
     bool sd = debug_init_sdfs("sd:/", -1);
-    debugf("FT64 r2n: libdragon backend starting; sdfs=%d\n", sd ? 1 : 0);
+    debugf("FT64 r2o: libdragon backend starting; sdfs=%d\n", sd ? 1 : 0);
 
     display_init(RESOLUTION_320x240, DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE);
     joypad_init();
@@ -83,7 +83,7 @@ void OSystem_N64Libdragon::initBackend() {
 
     EventsBaseBackend::initBackend();
 
-    debugf("FT64 r2n: backend init complete; audio=%d Hz buffer=%d\n",
+    debugf("FT64 r2o: backend init complete; audio=%d Hz buffer=%d\n",
            audio_get_frequency(), audio_get_buffer_length());
 }
 
@@ -347,7 +347,7 @@ void OSystem_N64Libdragon::setShakePos(int shakeOffset) {
 }
 
 void OSystem_N64Libdragon::showOverlay() {
-    debugf("FT64 r2n: showOverlay\n");
+    debugf("FT64 r2o: showOverlay\n");
     _overlayVisible = true;
     clampMouse();
     _mouseAccumX = (float)_mouseX;
@@ -356,7 +356,7 @@ void OSystem_N64Libdragon::showOverlay() {
 }
 
 void OSystem_N64Libdragon::hideOverlay() {
-    debugf("FT64 r2n: hideOverlay\n");
+    debugf("FT64 r2o: hideOverlay\n");
     _overlayVisible = false;
     clampMouse();
     _mouseAccumX = (float)_mouseX;
@@ -375,7 +375,7 @@ void OSystem_N64Libdragon::clearOverlay() {
      * overlay remains active. This backend uses fake alpha blending, so copy
      * the current game image into the overlay exactly as the historical N64
      * backend did instead of clearing the overlay to black. */
-    debugf("FT64 r2n: clearOverlay\n");
+    debugf("FT64 r2o: clearOverlay\n");
 
     if (_game16Dirty)
         rebuildGame16();
@@ -624,7 +624,7 @@ void OSystem_N64Libdragon::unlockMutex(MutexRef mutex) { (void)mutex; }
 void OSystem_N64Libdragon::deleteMutex(MutexRef mutex) { (void)mutex; }
 
 void OSystem_N64Libdragon::quit() {
-    debugf("FT64 r2n: quit requested\n");
+    debugf("FT64 r2o: quit requested\n");
 }
 
 Common::String OSystem_N64Libdragon::getDefaultConfigFileName() {

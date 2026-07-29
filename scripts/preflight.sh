@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-WORKFLOW=".github/workflows/build-full-throttle-r2n.yml"
+WORKFLOW=".github/workflows/build-full-throttle-r2o.yml"
 PATCH="upstream/scummvm-1.6.0-ft64.patch"
 
 echo "[preflight] shell syntax"
@@ -37,13 +37,13 @@ if [ "${#conflict_files[@]}" -ne 0 ]; then
   exit 1
 fi
 
-echo "[preflight] r2n identity"
-grep -Fqx 'name: Build Full Throttle N64 r2n' "$WORKFLOW"
-grep -Fq 'name: full-throttle-n64-r2n-build-report' "$WORKFLOW"
-grep -Fq 'TARGET := full-throttle-n64-r2n' backend/Makefile.libdragon
-grep -Fq 'full-throttle-n64-r2n.z64' scripts/build_scummvm.sh
-grep -Fq 'FT64 r2n: libdragon backend starting' backend/osys_n64_libdragon.cpp
-grep -Fq 'FULL THROTTLE N64 - r2n' probe/sd_probe.c
+echo "[preflight] r2o identity"
+grep -Fqx 'name: Build Full Throttle N64 r2o' "$WORKFLOW"
+grep -Fq 'name: full-throttle-n64-r2o-build-report' "$WORKFLOW"
+grep -Fq 'TARGET := full-throttle-n64-r2o' backend/Makefile.libdragon
+grep -Fq 'full-throttle-n64-r2o.z64' scripts/build_scummvm.sh
+grep -Fq 'FT64 r2o: libdragon backend starting' backend/osys_n64_libdragon.cpp
+grep -Fq 'FULL THROTTLE N64 - r2o' probe/sd_probe.c
 
 echo "[preflight] no game/demo payload machinery"
 test ! -e demo
@@ -51,7 +51,7 @@ test ! -e scripts/fetch_demo.sh
 test ! -e scripts/stage_demo_sd.sh
 if grep -RInE 'ft-dos-demo|fetch_demo|stage_demo|demo-cache|artifacts/sdcard' \
     .github scripts/run_all.sh scripts/publish_termux.sh TERMUX.md .gitignore; then
-  echo "game/demo packaging machinery leaked into r2n" >&2
+  echo "game/demo packaging machinery leaked into r2o" >&2
   exit 1
 fi
 
@@ -64,8 +64,6 @@ echo "[preflight] one consolidated source patch"
 mapfile -t patch_paths < <(git apply --numstat "$PATCH" | awk '{print $3}' | sort)
 expected_paths=(
   engines/scumm/insane/insane.cpp
-  engines/scumm/insane/insane.h
-  engines/scumm/scumm.cpp
   engines/scumm/smush/smush_player.cpp
   engines/scumm/smush/smush_player.h
   gui/module.mk
@@ -78,8 +76,8 @@ if [ "${patch_paths[*]}" != "${expected_paths[*]}" ]; then
 fi
 grep -Fq 'video speed override' "$PATCH"
 grep -Fq 'setCurVideoFlags' "$PATCH"
-grep -Fq '_smush_curSanFlags' "$PATCH"
-grep -Fq 'syncCurrentSanFlags' "$PATCH"
+grep -Fq '_player->setCurVideoFlags(_smush_setupsan2);' "$PATCH"
+grep -Fq 'int16 _curVideoFlags;' "$PATCH"
 grep -Fq 'predictivedialog.o' "$PATCH"
 
 echo "[preflight] Full Throttle-only build scope"
@@ -111,10 +109,10 @@ grep -Fq 'void OSystem_N64Libdragon::rebuildGame16()' backend/osys_n64_libdragon
 grep -Fq 'if (_game16Dirty)' backend/osys_n64_libdragon.cpp
 grep -Fq 'memcpy(drow + xoff, srow, _gameW * sizeof(uint16));' backend/osys_n64_libdragon.cpp
 
-echo "[preflight] r2n overlay transition correctness"
-grep -Fq 'FT64 r2n: showOverlay' backend/osys_n64_libdragon.cpp
-grep -Fq 'FT64 r2n: hideOverlay' backend/osys_n64_libdragon.cpp
-grep -Fq 'FT64 r2n: clearOverlay' backend/osys_n64_libdragon.cpp
+echo "[preflight] r2o overlay transition correctness"
+grep -Fq 'FT64 r2o: showOverlay' backend/osys_n64_libdragon.cpp
+grep -Fq 'FT64 r2o: hideOverlay' backend/osys_n64_libdragon.cpp
+grep -Fq 'FT64 r2o: clearOverlay' backend/osys_n64_libdragon.cpp
 grep -Fq 'if (_game16Dirty)' backend/osys_n64_libdragon.cpp
 grep -Fq 'dst[x] = (uint16)(src[x] & 0xFFFE);' backend/osys_n64_libdragon.cpp
 grep -Fq 'updateScreen();' backend/osys_n64_libdragon.cpp
@@ -165,8 +163,8 @@ grep -Fq 'tee "$ART/probe-build.log"' scripts/build_probe.sh
 echo "[preflight] integration evidence gates"
 grep -Fq 'git -C "$SCUMMVM" apply --check "$PATCH"' scripts/integrate_backend.sh
 [ "$(grep -Fc 'git -C "$SCUMMVM" apply "$PATCH"' scripts/integrate_backend.sh)" -eq 1 ]
-grep -Fq 'smush-header-before.txt' scripts/integrate_backend.sh
-grep -Fq 'smush-header-after.txt' scripts/integrate_backend.sh
+grep -Fq 'pristine-source' scripts/integrate_backend.sh
+grep -Fq 'engines/scumm/smush/smush_player.h' scripts/integrate_backend.sh
 grep -Fq 'make -C "$DST" -pn' scripts/integrate_backend.sh
 grep -Fq 'gui/libgui.a' scripts/integrate_backend.sh
 grep -Fq 'engines/scumm/libscumm.a' scripts/integrate_backend.sh

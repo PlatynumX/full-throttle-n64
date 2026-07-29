@@ -8,7 +8,7 @@ PATCH="$ROOT/upstream/scummvm-1.6.0-ft64.patch"
 ART="$ROOT/artifacts"
 PINNED_SCUMMVM="f75a652bb7c956f145abe881c87b5dbf5c9ec24b"
 
-mkdir -p "$ART"
+mkdir -p "$ART/pristine-source"
 test -d "$SCUMMVM/.git"
 actual="$(git -C "$SCUMMVM" rev-parse HEAD)"
 if [ "$actual" != "$PINNED_SCUMMVM" ]; then
@@ -23,57 +23,43 @@ if [ -s "$ART/scummvm-pristine-status.txt" ]; then
   exit 1
 fi
 
-capture_context() {
-  local rel="$1"
-  local pattern="$2"
-  local out="$3"
-  if ! grep -n -B8 -A35 -- "$pattern" "$SCUMMVM/$rel" > "$ART/$out"; then
-    echo "expected pristine-source anchor not found: $rel :: $pattern" >&2
-    exit 1
-  fi
-}
-
-# Preserve the exact pinned-source neighborhoods that the one consolidated
-# upstream patch is expected to touch. If the patch ever stops applying, the
-# build artifact therefore contains evidence from the pristine tree rather than
-# requiring a speculative follow-up.
-capture_context gui/module.mk 'predictivedialog\.o' gui-module-before.txt
-capture_context engines/scumm/smush/smush_player.cpp 'SmushPlayer::handleAnimHeader' smush-header-before.txt
-capture_context engines/scumm/smush/smush_player.h 'getVideoPalette' smush-player-header-before.txt
-capture_context engines/scumm/insane/insane.cpp 'smush_rewindCurrentSan' insane-flags-before.txt
-capture_context engines/scumm/insane/insane.cpp 'smush_setupSanWithFlu' insane-setup-before.txt
-capture_context engines/scumm/scumm.cpp '_smushFrameRate' scumm-framerate-before.txt
+# Preserve the exact pristine files touched by the single source patch. Do not
+# gate on guessed text anchors; the pinned commit plus git apply --check is the
+# compatibility test.
+for rel in \
+  gui/module.mk \
+  engines/scumm/insane/insane.cpp \
+  engines/scumm/smush/smush_player.cpp \
+  engines/scumm/smush/smush_player.h; do
+  mkdir -p "$ART/pristine-source/$(dirname "$rel")"
+  cp "$SCUMMVM/$rel" "$ART/pristine-source/$rel"
+done
 
 if [ "$(grep -c '^[[:space:]]*predictivedialog\.o[[:space:]]*\\' "$SCUMMVM/gui/module.mk")" -ne 1 ]; then
   echo "expected exactly one predictivedialog.o entry in pristine gui/module.mk" >&2
   exit 1
 fi
 
-# One patch, one application, against the exact pristine pinned tree. There is
-# deliberately no fuzzy/sed/regex fallback. The later SMUSH logic comes from
-# ScummVM upstream commit 9e7e6a08b276ebe5dfdbc79e9a9fc2edcfd12bf8.
+# One patch, one application, against the exact pristine pinned tree. The
+# SMUSH behavior is a minimal backport of ScummVM upstream commit
+# 9e7e6a08b276ebe5dfdbc79e9a9fc2edcfd12bf8 adapted to the verified 1.6.0
+# class layout. There is deliberately no fuzzy/sed/regex fallback.
 echo "[integrate] checking consolidated source patch against pinned ScummVM"
 git -C "$SCUMMVM" apply --check "$PATCH"
 echo "[integrate] applying consolidated source patch once"
 git -C "$SCUMMVM" apply "$PATCH"
 
-# Verify the intended source-level results, not merely a zero exit code.
+# Verify source-level results, not merely a zero exit code.
 if grep -q '^[[:space:]]*predictivedialog\.o[[:space:]]*\\' "$SCUMMVM/gui/module.mk"; then
   echo "predictivedialog.o remained in GUI module after patch" >&2
   exit 1
 fi
+
 grep -Fq 'video speed override' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
 grep -Fq 'setCurVideoFlags' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
-grep -Fq 'setCurVideoFlags' "$SCUMMVM/engines/scumm/smush/smush_player.h"
-grep -Fq '_curVideoFlags' "$SCUMMVM/engines/scumm/smush/smush_player.h"
-grep -Fq '_smush_curSanFlags' "$SCUMMVM/engines/scumm/insane/insane.cpp"
-grep -Fq 'syncCurrentSanFlags' "$SCUMMVM/engines/scumm/insane/insane.cpp"
-grep -Fq 'syncCurrentSanFlags' "$SCUMMVM/engines/scumm/insane/insane.h"
-
-capture_context gui/module.mk 'options\.o' gui-module-after.txt
-capture_context engines/scumm/smush/smush_player.cpp 'SmushPlayer::handleAnimHeader' smush-header-after.txt
-capture_context engines/scumm/smush/smush_player.h 'setCurVideoFlags' smush-player-header-after.txt
-capture_context engines/scumm/insane/insane.cpp 'syncCurrentSanFlags' insane-flags-after.txt
+grep -Fq 'int16 _curVideoFlags;' "$SCUMMVM/engines/scumm/smush/smush_player.h"
+grep -Fq 'void setCurVideoFlags(int16 flags);' "$SCUMMVM/engines/scumm/smush/smush_player.h"
+[ "$(grep -Fc '_player->setCurVideoFlags(_smush_setupsan2);' "$SCUMMVM/engines/scumm/insane/insane.cpp")" -eq 3 ]
 
 rm -rf "$DST"
 mkdir -p "$DST"
@@ -125,10 +111,7 @@ for required in \
   fi
 done
 
-# The real V=1 cross-build is authoritative for compiler/linker/package command
-# behavior. Do not gate it with a brittle parser of make -n output.
-
 git -C "$SCUMMVM" add -N backends/platform/n64libdragon
 git -C "$SCUMMVM" diff --check
-git -C "$SCUMMVM" diff > "$ART/r2n-source-delta.patch"
+git -C "$SCUMMVM" diff > "$ART/r2o-source-delta.patch"
 git -C "$SCUMMVM" status --short > "$ART/scummvm-status-after-integration.txt"
