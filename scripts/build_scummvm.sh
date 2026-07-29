@@ -12,9 +12,15 @@ make -C "$PORT" V=1 -j"$(nproc)" 2>&1 | tee "$ART/scummvm-build.log"
 rc=${PIPESTATUS[0]}
 set -e
 
+<<<<<<< HEAD
 if [ "$rc" -eq 0 ] && [ -f "$PORT/full-throttle-n64-r2b.z64" ]; then
   cp "$PORT/full-throttle-n64-r2b.z64" "$ART/full-throttle-n64-r2b.z64"
   sha256sum "$ART/full-throttle-n64-r2b.z64" > "$ART/full-throttle-n64-r2b.sha256"
+=======
+if [ "$rc" -eq 0 ] && [ -f "$PORT/full-throttle-n64-r2c.z64" ]; then
+  cp "$PORT/full-throttle-n64-r2c.z64" "$ART/full-throttle-n64-r2c.z64"
+  sha256sum "$ART/full-throttle-n64-r2c.z64" > "$ART/full-throttle-n64-r2c.sha256"
+>>>>>>> 5fed4cf (Full Throttle N64 r2c CI compatibility fixes)
   printf 'PASS\n' > "$ART/scummvm-build-status.txt"
 else
   printf 'FAIL rc=%s\n' "$rc" > "$ART/scummvm-build-status.txt"

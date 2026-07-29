@@ -30,5 +30,9 @@ grep -q 'dir_findfirst' "$DST/n64libdragon-fs.cpp"
 # staging their contents or mutating any upstream ScummVM source.
 git -C "$SCUMMVM" add -N backends/platform/n64libdragon
 git -C "$SCUMMVM" diff --check
+<<<<<<< HEAD
 git -C "$SCUMMVM" diff > "$ROOT/artifacts/r2b-backend.patch"
+=======
+git -C "$SCUMMVM" diff > "$ROOT/artifacts/r2c-backend.patch"
+>>>>>>> 5fed4cf (Full Throttle N64 r2c CI compatibility fixes)
 git -C "$SCUMMVM" status --short > "$ROOT/artifacts/scummvm-status-after-integration.txt"

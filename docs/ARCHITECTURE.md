@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # r2b architecture
+=======
+# r2c architecture
+>>>>>>> 5fed4cf (Full Throttle N64 r2c CI compatibility fixes)
 
 ## Engine side
 
@@ -56,7 +60,11 @@ The probe:
 * initializes a controller;
 * mounts `sd:/`;
 * reads `sd:/fullthrottle/`;
+<<<<<<< HEAD
 * creates/writes/reads `sd:/fullthrottle/ft64-r2b-probe.txt`;
+=======
+* creates/writes/reads `sd:/fullthrottle/ft64-r2c-probe.txt`;
+>>>>>>> 5fed4cf (Full Throttle N64 r2c CI compatibility fixes)
 * initializes the audio subsystem;
 * reports status on screen and through debug output.
 

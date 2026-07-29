@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # Full Throttle N64 r2b
+=======
+# Full Throttle N64 r2c
+>>>>>>> 5fed4cf (Full Throttle N64 r2c CI compatibility fixes)
 # ScummVM 1.6.0 + new libdragon backend.
 
 srcdir := ../../..
@@ -17,9 +21,15 @@ N64_CFLAGS := $(filter-out -Werror,$(N64_CFLAGS))
 N64_CXXFLAGS := $(filter-out -Werror -std=gnu++17,$(N64_CXXFLAGS)) -std=gnu++11
 
 # n64.mk defines defaults, so project-specific metadata must follow the include.
+<<<<<<< HEAD
 N64_ROM_TITLE := Full Throttle N64 r2b
 N64_ROM_REGIONFREE := true
 N64_ROM_CONTROLLER1 := joypad
+=======
+N64_ROM_TITLE := Full Throttle N64 r2c
+N64_ROM_REGIONFREE := true
+N64_ROM_CONTROLLER1 := n64
+>>>>>>> 5fed4cf (Full Throttle N64 r2c CI compatibility fixes)
 
 CC := $(N64_CC)
 CXX := $(N64_CXX)
@@ -65,7 +75,11 @@ OBJS := \
 
 include $(srcdir)/Makefile.common
 
+<<<<<<< HEAD
 TARGET := full-throttle-n64-r2b
+=======
+TARGET := full-throttle-n64-r2c
+>>>>>>> 5fed4cf (Full Throttle N64 r2c CI compatibility fixes)
 
 all: $(TARGET).z64
 
