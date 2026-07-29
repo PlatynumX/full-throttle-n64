@@ -1,4 +1,4 @@
-# Full Throttle N64 r2g
+# Full Throttle N64 r2h
 # ScummVM 1.6.0 + new libdragon backend.
 
 srcdir := ../../..
@@ -17,7 +17,7 @@ N64_CFLAGS := $(filter-out -Werror,$(N64_CFLAGS))
 N64_CXXFLAGS := $(filter-out -Werror -std=gnu++17,$(N64_CXXFLAGS)) -std=gnu++11
 
 # n64.mk defines defaults, so project-specific metadata must follow the include.
-N64_ROM_TITLE := Full Throttle N64 r2g
+N64_ROM_TITLE := Full Throttle N64 r2h
 N64_ROM_REGIONFREE := true
 N64_ROM_CONTROLLER1 := n64
 
@@ -27,10 +27,13 @@ AS := $(N64_AS)
 AR := $(N64_AR) rcs
 RANLIB := $(N64_GCCPREFIX_TRIPLET)ranlib
 
-CFLAGS := $(filter-out -Werror,$(N64_CFLAGS))
-CXXFLAGS := $(filter-out -Werror,$(N64_CXXFLAGS)) -fno-rtti -fno-exceptions
-ASFLAGS := $(N64_ASFLAGS)
-LDFLAGS := $(N64_LDFLAGS)
+# libdragon's %.z64 target owns propagation of N64_CFLAGS/N64_CXXFLAGS/
+# N64_ASFLAGS/N64_LDFLAGS to the ELF and object prerequisite chain. Do not
+# seed the generic flags with N64_* here or every platform flag is duplicated.
+CFLAGS :=
+CXXFLAGS := -fno-rtti -fno-exceptions
+ASFLAGS :=
+LDFLAGS :=
 
 # ScummVM's generic make rules expect these helpers to be supplied by the port.
 DEPDIR := .deps
@@ -67,7 +70,7 @@ OBJS := \
 
 include $(srcdir)/Makefile.common
 
-TARGET := full-throttle-n64-r2g
+TARGET := full-throttle-n64-r2h
 
 all: $(TARGET).z64
 

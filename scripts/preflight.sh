@@ -16,12 +16,22 @@ if grep -RInE '^(<<<<<<<|=======|>>>>>>>)' \
   exit 1
 fi
 
-echo "[preflight] required r2g backend gates"
+echo "[preflight] required r2h backend gates"
 grep -q 'ENABLE_SCUMM_7_8 := $(ENABLED)' backend/Makefile.libdragon
 grep -q 'N64_LIBDRAGON' backend/Makefile.libdragon
 grep -q '^MKDIR := mkdir -p' backend/Makefile.libdragon
 grep -q 'filter-out -Werror' backend/Makefile.libdragon
 grep -q -- '-std=gnu++11' backend/Makefile.libdragon
+# libdragon n64.mk owns platform-flag propagation through the %.z64 target.
+# Generic flags must contain only port-specific deltas, never a second copy of N64_*.
+grep -q '^CFLAGS :=$' backend/Makefile.libdragon
+grep -q '^CXXFLAGS := -fno-rtti -fno-exceptions$' backend/Makefile.libdragon
+grep -q '^ASFLAGS :=$' backend/Makefile.libdragon
+grep -q '^LDFLAGS :=$' backend/Makefile.libdragon
+if grep -nE '^(CFLAGS|CXXFLAGS|ASFLAGS|LDFLAGS)[[:space:]]*:=[[:space:]]*.*\$\(N64_(CFLAGS|CXXFLAGS|ASFLAGS|LDFLAGS)\)' backend/Makefile.libdragon; then
+  echo "libdragon platform flags are being copied into generic flags; this duplicates target-specific propagation" >&2
+  exit 1
+fi
 grep -Fq 'INCLUDES += -I. -I$(srcdir) -I$(srcdir)/engines' backend/Makefile.libdragon
 test -f upstream/scummvm-1.6.0-ft64.patch
 grep -Fq -- $'-\tpredictivedialog.o \\' upstream/scummvm-1.6.0-ft64.patch
@@ -60,7 +70,7 @@ fi
 
 echo "[preflight] previous CI regression guards"
 if grep -R -nE '^N64_ROM_CONTROLLER1[[:space:]]*[:?+]?=[[:space:]]*joypad$' backend probe; then
-  echo "invalid libdragon ROM-header controller metadata leaked into r2g" >&2
+  echo "invalid libdragon ROM-header controller metadata leaked into r2h" >&2
   exit 1
 fi
 if grep -R -n 'getPixels()' backend; then
@@ -74,17 +84,17 @@ fi
 
 echo "[preflight] no unsupported POSIX directory backend"
 if grep -R -nE '<dirent\.h>|opendir\(|readdir\(|closedir\(|backends/fs/posix' backend probe; then
-  echo "unsupported POSIX directory dependency leaked into r2g" >&2
+  echo "unsupported POSIX directory dependency leaked into r2h" >&2
   exit 1
 fi
 if grep -R -nE 'mkdir\("sd:/' backend probe; then
-  echo "runtime SD mkdir leaked into r2g; pinned libdragon FAT has no mkdir hook" >&2
+  echo "runtime SD mkdir leaked into r2h; pinned libdragon FAT has no mkdir hook" >&2
   exit 1
 fi
 
 echo "[preflight] no known legacy/freeze traps"
 if grep -R -nE 'hkz-libn64|libn64\.h|pakfs|framfs|initRomFSmanager|NONSTANDARD_PORT' backend probe; then
-  echo "legacy N64 dependency leaked into r2g backend" >&2
+  echo "legacy N64 dependency leaked into r2h backend" >&2
   exit 1
 fi
 if grep -n 'for *(;;)' backend/osys_n64_libdragon.cpp; then
@@ -97,7 +107,7 @@ if grep -R -n '_timerCallback\|setTimerCallback' backend; then
 fi
 
 echo "[preflight] CI does not depend on executable script bits"
-if grep -nE 'run: \./scripts/|^[[:space:]]+\./scripts/' .github/workflows/build-full-throttle-r2g.yml; then
+if grep -nE 'run: \./scripts/|^[[:space:]]+\./scripts/' .github/workflows/build-full-throttle-r2h.yml; then
   echo "workflow invokes repository scripts directly; use bash ./scripts/..." >&2
   exit 1
 fi
@@ -107,23 +117,28 @@ if grep -nE '^\./scripts/' scripts/run_all.sh; then
 fi
 
 echo "[preflight] both N64 compile paths preserve diagnostics"
-grep -q 'id: probe' .github/workflows/build-full-throttle-r2g.yml
-grep -q 'id: scummvm' .github/workflows/build-full-throttle-r2g.yml
-[ "$(grep -c 'continue-on-error: true' .github/workflows/build-full-throttle-r2g.yml)" -eq 2 ]
+grep -q 'id: probe' .github/workflows/build-full-throttle-r2h.yml
+grep -q 'id: scummvm' .github/workflows/build-full-throttle-r2h.yml
+[ "$(grep -c 'continue-on-error: true' .github/workflows/build-full-throttle-r2h.yml)" -eq 2 ]
 
 echo "[preflight] no stale operational revision labels"
-if grep -RInE 'r2[a-f]|R2[A-F]' .github backend probe scripts demo upstream TERMUX.md; then
-  echo "stale prior-revision operational label leaked into r2g" >&2
+if grep -RInE 'r2[a-g]|R2[A-G]' .github backend probe scripts demo upstream TERMUX.md; then
+  echo "stale prior-revision operational label leaked into r2h" >&2
   exit 1
 fi
 
 echo "[preflight] demo and toolchain URLs"
 grep -q 'downloads.scummvm.org/frs/demos/scumm/ft-dos-demo-en.zip' scripts/fetch_demo.sh
-grep -q 'toolchain-continuous-prerelease/gcc-toolchain-mips64-x86_64.deb' .github/workflows/build-full-throttle-r2g.yml
+grep -q 'toolchain-continuous-prerelease/gcc-toolchain-mips64-x86_64.deb' .github/workflows/build-full-throttle-r2h.yml
 grep -q '35f85a0797324a5ed0c723203e33ab3c1da94fdd' scripts/fetch_libdragon.sh
 
 echo "[preflight] build result accounting"
 grep -q 'fail_rc=1' scripts/build_scummvm.sh
-grep -Fq 'if [ "$rc" -eq 0 ] && [ -f "$PORT/full-throttle-n64-r2g.z64" ]; then' scripts/build_scummvm.sh
+grep -Fq 'if [ "$rc" -eq 0 ] && [ -f "$PORT/full-throttle-n64-r2h.z64" ]; then' scripts/build_scummvm.sh
+
+echo "[preflight] generated-make flag ownership audit"
+grep -Fq 'make -C "$DST" -n full-throttle-n64-r2h.z64' scripts/integrate_backend.sh
+grep -Fq 'expected exactly one n64.ld linker script flag' scripts/integrate_backend.sh
+grep -Fq "for flag in '-march=vr4300' '-std=gnu++11'; do" scripts/integrate_backend.sh
 
 echo "[preflight] OK"

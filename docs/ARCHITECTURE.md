@@ -1,4 +1,4 @@
-# r2g architecture
+# r2h architecture
 
 ## Engine
 
@@ -44,3 +44,7 @@ This lets us distinguish a SummerCart/libdragon failure from a ScummVM engine/ba
 ## First runtime risks after a successful link
 
 Once the demo boots, the next unknowns become measured runtime behavior rather than build speculation: SMUSH decoding throughput, iMUSE Digital mixing load, INSANE sequences, memory pressure, SD streaming behavior and save/load behavior.
+
+## Build flag ownership
+
+Pinned libdragon `n64.mk` owns N64 platform compiler, assembler and linker flags through its `%.z64` target-specific variables. The ScummVM backend does not copy those variables into global `CFLAGS`, `CXXFLAGS`, `ASFLAGS` or `LDFLAGS`; it adds only backend-specific deltas. This avoids duplicate toolchain flags and duplicate `n64.ld` linker scripts.

@@ -86,8 +86,43 @@ for required in \
   fi
 done
 
+# Verify the actual libdragon/ScummVM dry-run link command before compilation.
+# n64.mk propagates N64_LDFLAGS from the .z64 target into the ELF prerequisite;
+# the backend must not seed LDFLAGS with a second copy.
+dry_run="$ART/scummvm-dry-run.txt"
+make -C "$DST" -n full-throttle-n64-r2h.z64 > "$dry_run"
+link_line="$(grep 'mips64-elf-g++ -o build/full-throttle-n64-r2h\.elf' "$dry_run" | head -1 || true)"
+if [ -z "$link_line" ]; then
+  echo "could not find final ScummVM libdragon link command in make dry-run" >&2
+  exit 1
+fi
+printf '%s
+' "$link_line" > "$ART/scummvm-link-command.txt"
+linker_script_count="$( (printf '%s
+' "$link_line" | grep -o -- '-Tn64\.ld' || true) | wc -l | tr -d ' ')"
+if [ "$linker_script_count" -ne 1 ]; then
+  echo "expected exactly one n64.ld linker script flag, found $linker_script_count" >&2
+  exit 1
+fi
+
+compile_line="$(grep 'mips64-elf-g++ .* -c ' "$dry_run" | head -1 || true)"
+if [ -z "$compile_line" ]; then
+  echo "could not find a C++ compile command in make dry-run" >&2
+  exit 1
+fi
+printf '%s
+' "$compile_line" > "$ART/scummvm-cxx-command.txt"
+for flag in '-march=vr4300' '-std=gnu++11'; do
+  flag_count="$( (printf '%s
+' "$compile_line" | grep -o -- "$flag" || true) | wc -l | tr -d ' ')"
+  if [ "$flag_count" -ne 1 ]; then
+    echo "expected exactly one $flag in C++ compile command, found $flag_count" >&2
+    exit 1
+  fi
+done
+
 # Capture the complete clean delta against the pinned source.
 git -C "$SCUMMVM" add -N backends/platform/n64libdragon
 git -C "$SCUMMVM" diff --check
-git -C "$SCUMMVM" diff > "$ART/r2g-source-delta.patch"
+git -C "$SCUMMVM" diff > "$ART/r2h-source-delta.patch"
 git -C "$SCUMMVM" status --short > "$ART/scummvm-status-after-integration.txt"

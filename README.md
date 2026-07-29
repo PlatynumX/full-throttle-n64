@@ -1,4 +1,4 @@
-# Full Throttle N64 r2g
+# Full Throttle N64 r2h
 
 Full Throttle-only ScummVM 1.6.0 bring-up for Nintendo 64 using libdragon and SummerCart SD storage.
 
@@ -17,13 +17,13 @@ Nintendo 64 + Expansion Pak
 
 The repository does not contain the retail game. CI fetches ScummVM's public DOS Full Throttle demo and stages it as the hardware test payload.
 
-## Why r2g exists
+## Why r2h exists
 
-The r2f CI build reached `gui/predictivedialog.cpp` and failed on legacy predictive-input code. The attempted r2f Makefile filter was ineffective.
+r2g compiled the complete ScummVM/SCUMM target and reached the final libdragon link. The linker then rejected the command because `n64.ld` appeared twice.
 
-The reason is now verified in ScummVM 1.6.0's build system: `Makefile.common` includes each module's `module.mk`, and `rules.mk` turns static modules into archives such as `gui/libgui.a`. `gui/predictivedialog.o` is therefore a prerequisite of `gui/libgui.a`, not a top-level `OBJS` entry. Filtering top-level `OBJS` after `Makefile.common` cannot remove it.
+The cause is in the backend Makefile's flag ownership, not in ScummVM: the backend copied `N64_CFLAGS`, `N64_CXXFLAGS`, `N64_ASFLAGS`, and `N64_LDFLAGS` into the generic flags, while pinned libdragon `n64.mk` also appends those same `N64_*` variables from its `%.z64` target to the complete prerequisite chain. GNU make target-specific variables are inherited by prerequisites, so the ELF link received two copies of `N64_LDFLAGS`, including two `-Tn64.ld` flags. The earlier compile logs also showed duplicated compile flags for the same reason.
 
-r2g discards that approach completely.
+r2h fixes the ownership model: libdragon alone supplies platform flags; the backend generic flags contain only ScummVM-specific deltas such as `-fno-rtti -fno-exceptions`. CI dry-runs the final link and refuses to compile unless `-Tn64.ld` appears exactly once.
 
 ## Clean source policy
 
@@ -66,11 +66,11 @@ The old hkz-libn64, ROMFS, PakFS and FRAMFS backend is not used.
 
 ## Build outputs
 
-The GitHub Action uploads `full-throttle-n64-r2g-build-report` containing diagnostics plus, when successful:
+The GitHub Action uploads `full-throttle-n64-r2h-build-report` containing diagnostics plus, when successful:
 
 ```text
 ft64-sd-probe.z64
-full-throttle-n64-r2g.z64
+full-throttle-n64-r2h.z64
 sdcard/fullthrottle/
 ```
 
