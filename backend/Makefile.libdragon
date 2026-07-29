@@ -1,0 +1,78 @@
+# Full Throttle N64 r2
+# ScummVM 1.6.0 + new libdragon backend.
+
+srcdir := ../../..
+VPATH := $(srcdir)
+BUILD_DIR := build
+SOURCE_DIR := $(srcdir)
+
+include $(N64_INST)/include/n64.mk
+
+# Old ScummVM emits warnings that modern libdragon promotes via -Werror.
+# Filter it at the source so n64.mk target-specific flag propagation cannot
+# accidentally re-introduce it for object prerequisites.
+N64_CFLAGS := $(filter-out -Werror,$(N64_CFLAGS))
+# ScummVM 1.6.0 predates C++17. Force a compatible dialect instead of
+# inheriting libdragon's current default.
+N64_CXXFLAGS := $(filter-out -Werror -std=gnu++17,$(N64_CXXFLAGS)) -std=gnu++11
+
+# n64.mk defines defaults, so project-specific metadata must follow the include.
+N64_ROM_TITLE := Full Throttle N64 r2
+N64_ROM_REGIONFREE := true
+N64_ROM_CONTROLLER1 := joypad
+
+CC := $(N64_CC)
+CXX := $(N64_CXX)
+AS := $(N64_AS)
+AR := $(N64_AR) rcs
+RANLIB := $(N64_GCCPREFIX_TRIPLET)ranlib
+
+CFLAGS := $(filter-out -Werror,$(N64_CFLAGS))
+CXXFLAGS := $(filter-out -Werror,$(N64_CXXFLAGS)) -fno-rtti -fno-exceptions
+ASFLAGS := $(N64_ASFLAGS)
+LDFLAGS := $(N64_LDFLAGS)
+
+# ScummVM's generic make rules expect these helpers to be supplied by the port.
+DEPDIR := .deps
+MKDIR := mkdir -p
+RM := rm -f
+RM_REC := rm -rf
+HAVE_GCC3 := 1
+VERBOSE_BUILD := 1
+USE_RGB_COLOR := 0
+
+# ScummVM 1.6.0 portability/build defines.
+DEFINES += -D__N64__
+DEFINES += -DN64_LIBDRAGON
+DEFINES += -DSYSTEM_NOT_SUPPORTING_D_TYPE
+DEFINES += -DDISABLE_FANCY_THEMES
+DEFINES += -DDISABLE_DOSBOX_OPL
+DEFINES += -DDISABLE_TEXT_CONSOLE
+DEFINES += -DN64_EXTREME_MEMORY_SAVING
+
+CFLAGS += $(DEFINES) -I$(srcdir)
+CXXFLAGS += $(DEFINES) -I$(srcdir)
+
+BACKEND := n64libdragon
+ENABLED := STATIC_PLUGIN
+ENABLE_SCUMM := $(ENABLED)
+ENABLE_SCUMM_7_8 := $(ENABLED)
+
+OBJS := \
+	backends/platform/n64libdragon/nintendo64_libdragon.o \
+	backends/platform/n64libdragon/osys_n64_libdragon.o \
+	backends/fs/posix/posix-fs.o \
+	backends/fs/posix/posix-fs-factory.o
+
+include $(srcdir)/Makefile.common
+
+TARGET := full-throttle-n64-r2
+
+all: $(TARGET).z64
+
+$(BUILD_DIR)/$(TARGET).elf: $(OBJS)
+
+clean:
+	$(RM_REC) $(BUILD_DIR) $(TARGET).z64
+
+.PHONY: all clean

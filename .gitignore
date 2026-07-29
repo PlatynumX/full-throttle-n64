@@ -1,0 +1,10 @@
+work/
+artifacts/
+*.z64
+*.elf
+*.map
+*.o
+*.a
+*.d
+demo-cache/
+sdcard/
