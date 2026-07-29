@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-WORKFLOW=".github/workflows/build-full-throttle-r2o.yml"
+WORKFLOW=".github/workflows/build-full-throttle-r2p.yml"
 PATCH="upstream/scummvm-1.6.0-ft64.patch"
 
 echo "[preflight] shell syntax"
@@ -37,13 +37,13 @@ if [ "${#conflict_files[@]}" -ne 0 ]; then
   exit 1
 fi
 
-echo "[preflight] r2o identity"
-grep -Fqx 'name: Build Full Throttle N64 r2o' "$WORKFLOW"
-grep -Fq 'name: full-throttle-n64-r2o-build-report' "$WORKFLOW"
-grep -Fq 'TARGET := full-throttle-n64-r2o' backend/Makefile.libdragon
-grep -Fq 'full-throttle-n64-r2o.z64' scripts/build_scummvm.sh
-grep -Fq 'FT64 r2o: libdragon backend starting' backend/osys_n64_libdragon.cpp
-grep -Fq 'FULL THROTTLE N64 - r2o' probe/sd_probe.c
+echo "[preflight] r2p identity"
+grep -Fqx 'name: Build Full Throttle N64 r2p' "$WORKFLOW"
+grep -Fq 'name: full-throttle-n64-r2p-build-report' "$WORKFLOW"
+grep -Fq 'TARGET := full-throttle-n64-r2p' backend/Makefile.libdragon
+grep -Fq 'full-throttle-n64-r2p.z64' scripts/build_scummvm.sh
+grep -Fq 'FT64 r2p: libdragon backend starting' backend/osys_n64_libdragon.cpp
+grep -Fq 'FULL THROTTLE N64 - r2p' probe/sd_probe.c
 
 echo "[preflight] no game/demo payload machinery"
 test ! -e demo
@@ -51,7 +51,7 @@ test ! -e scripts/fetch_demo.sh
 test ! -e scripts/stage_demo_sd.sh
 if grep -RInE 'ft-dos-demo|fetch_demo|stage_demo|demo-cache|artifacts/sdcard' \
     .github scripts/run_all.sh scripts/publish_termux.sh TERMUX.md .gitignore; then
-  echo "game/demo packaging machinery leaked into r2o" >&2
+  echo "game/demo packaging machinery leaked into r2p" >&2
   exit 1
 fi
 
@@ -109,10 +109,10 @@ grep -Fq 'void OSystem_N64Libdragon::rebuildGame16()' backend/osys_n64_libdragon
 grep -Fq 'if (_game16Dirty)' backend/osys_n64_libdragon.cpp
 grep -Fq 'memcpy(drow + xoff, srow, _gameW * sizeof(uint16));' backend/osys_n64_libdragon.cpp
 
-echo "[preflight] r2o overlay transition correctness"
-grep -Fq 'FT64 r2o: showOverlay' backend/osys_n64_libdragon.cpp
-grep -Fq 'FT64 r2o: hideOverlay' backend/osys_n64_libdragon.cpp
-grep -Fq 'FT64 r2o: clearOverlay' backend/osys_n64_libdragon.cpp
+echo "[preflight] r2p overlay transition correctness"
+grep -Fq 'FT64 r2p: showOverlay' backend/osys_n64_libdragon.cpp
+grep -Fq 'FT64 r2p: hideOverlay' backend/osys_n64_libdragon.cpp
+grep -Fq 'FT64 r2p: clearOverlay' backend/osys_n64_libdragon.cpp
 grep -Fq 'if (_game16Dirty)' backend/osys_n64_libdragon.cpp
 grep -Fq 'dst[x] = (uint16)(src[x] & 0xFFFE);' backend/osys_n64_libdragon.cpp
 grep -Fq 'updateScreen();' backend/osys_n64_libdragon.cpp

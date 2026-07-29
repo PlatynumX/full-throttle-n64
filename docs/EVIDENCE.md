@@ -1,4 +1,4 @@
-# Evidence / design notes — r2o
+# Evidence / design notes — r2p
 
 ## Hardware observation
 
@@ -11,7 +11,7 @@ The current hardware observations are:
 - SMUSH video remains choppy.
 - Transitioning away from the initial gameplay screen can leave a black screen.
 
-Those are the only runtime problems targeted by r2o. Hardware retesting remains
+Those are the only runtime problems targeted by r2p. Hardware retesting remains
 the authority on whether either issue is resolved.
 
 ## Overlay contract and historical N64 behavior
@@ -36,10 +36,10 @@ presentation because some games may not update the screen themselves when the
 overlay is disabled.
 
 r2m violated the first requirement by making `clearOverlay()` a black-buffer
-clear only. r2o restores the fake-alpha behavior and performs an immediate game
+clear only. r2p restores the fake-alpha behavior and performs an immediate game
 presentation from `hideOverlay()`.
 
-The r2o game buffer is libdragon RGBA5551. ScummVM 1.6.0's `ColorMasks<555>`
+The r2p game buffer is libdragon RGBA5551. ScummVM 1.6.0's `ColorMasks<555>`
 has an N64-specific layout with red at bit 11, green at bit 6, blue at bit 1,
 and the low bit unused. Therefore copying the converted game pixel into the
 overlay while clearing bit 0 preserves the color bits and yields the format
@@ -78,7 +78,7 @@ fixed, mostly affecting Full Throttle:
 
 https://docs.scummvm.org/en/v2.7.0/help/release.html
 
-The same release also introduced a low-latency audio mode. r2o does **not**
+The same release also introduced a low-latency audio mode. r2p does **not**
 enable or backport that audio mode: it is a separate behavior and is not needed
 to test the identified frame-rate correction.
 
@@ -103,7 +103,7 @@ Pinned files inspected:
 - https://raw.githubusercontent.com/scummvm/scummvm/f75a652bb7c956f145abe881c87b5dbf5c9ec24b/engines/scumm/smush/smush_player.cpp
 - https://raw.githubusercontent.com/scummvm/scummvm/f75a652bb7c956f145abe881c87b5dbf5c9ec24b/engines/scumm/insane/insane.cpp
 
-r2o therefore uses a minimal source-level adaptation of the upstream behavior
+r2p therefore uses a minimal source-level adaptation of the upstream behavior
 to the verified 1.6.0 layout:
 
 - keep 1.6.0's existing `_smush_setupsan2` field rather than renaming it;
@@ -131,5 +131,5 @@ second patch.
 
 ## No game/demo packaging
 
-r2o does not fetch, stage, archive, or upload Full Throttle data. Hardware uses
+r2p does not fetch, stage, archive, or upload Full Throttle data. Hardware uses
 the existing `sd:/fullthrottle/` directory.

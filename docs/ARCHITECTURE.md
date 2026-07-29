@@ -1,4 +1,4 @@
-# r2o architecture
+# r2p architecture
 
 ## Runtime data path
 
@@ -24,7 +24,7 @@ ScummVM renders its normal 8-bit CLUT game surface. The N64 backend retains the
 r2m second 16-bit converted surface, so ordinary presentation is bulk copy
 rather than a full palette conversion in every `updateScreen()`.
 
-r2o additionally fixes fake-alpha overlay handling: `clearOverlay()` composes
+r2p additionally fixes fake-alpha overlay handling: `clearOverlay()` composes
 the current game frame into the overlay instead of leaving it black, and
 `hideOverlay()` immediately presents the game frame so an overlay transition
 does not depend on a later engine-driven redraw.
@@ -41,12 +41,12 @@ exact pinned checkout. No fallback source mutation exists.
 
 ## Input
 
-r2o retains the r2m libdragon Joypad/mouse path unchanged. Controls are not part
+r2p retains the r2m libdragon Joypad/mouse path unchanged. Controls are not part
 of this runtime pass.
 
 ## Audio/timers
 
-r2o does not change r2m audio configuration or timer servicing. Audio remains
+r2p does not change r2m audio configuration or timer servicing. Audio remains
 22050 Hz with three libdragon buffers. The ScummVM timer manager remains serviced
 from normal backend execution rather than interrupt context.
 

@@ -113,5 +113,5 @@ done
 
 git -C "$SCUMMVM" add -N backends/platform/n64libdragon
 git -C "$SCUMMVM" diff --check
-git -C "$SCUMMVM" diff > "$ART/r2o-source-delta.patch"
+git -C "$SCUMMVM" diff > "$ART/r2p-source-delta.patch"
 git -C "$SCUMMVM" status --short > "$ART/scummvm-status-after-integration.txt"
