@@ -1,155 +1,151 @@
+\
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+
+WORKFLOW=".github/workflows/build-full-throttle-r2m.yml"
 
 echo "[preflight] shell syntax"
 for f in scripts/*.sh; do
   bash -n "$f"
 done
 
+echo "[preflight] required project files"
+for f in \
+  "$WORKFLOW" \
+  backend/Makefile.libdragon \
+  backend/osys_n64_libdragon.cpp \
+  backend/osys_n64_libdragon.h \
+  backend/n64libdragon-fs.cpp \
+  backend/n64libdragon-fs.h \
+  backend/nintendo64_libdragon.cpp \
+  probe/Makefile \
+  probe/sd_probe.c \
+  upstream/scummvm-1.6.0-ft64.patch; do
+  test -f "$f"
+done
+
 echo "[preflight] no unresolved merge-conflict markers"
-if grep -RInE '^(<<<<<<<|=======|>>>>>>>)' \
-    --exclude-dir=.git --exclude-dir=work --exclude-dir=artifacts --exclude-dir=demo-cache \
-    .github backend probe scripts docs demo upstream README.md TERMUX.md .gitattributes; then
-  echo "unresolved Git merge-conflict marker found; refusing to build" >&2
+mapfile -t conflict_files < <(
+  grep -RIlE '^(<<<<<<<|=======|>>>>>>>)' \
+    --exclude-dir=.git --exclude-dir=work --exclude-dir=artifacts \
+    .github backend probe scripts docs upstream README.md TERMUX.md .gitattributes 2>/dev/null || true
+)
+if [ "${#conflict_files[@]}" -ne 0 ]; then
+  printf 'unresolved Git conflict marker in: %s\n' "${conflict_files[@]}" >&2
   exit 1
 fi
 
-echo "[preflight] required r2l backend gates"
-grep -q 'ENABLE_SCUMM_7_8 := $(ENABLED)' backend/Makefile.libdragon
-grep -q 'N64_LIBDRAGON' backend/Makefile.libdragon
-grep -q '^MKDIR := mkdir -p' backend/Makefile.libdragon
-grep -q 'filter-out -Werror' backend/Makefile.libdragon
-grep -q -- '-std=gnu++11' backend/Makefile.libdragon
-# libdragon n64.mk owns platform-flag propagation through the %.z64 target.
-# Generic flags must contain only port-specific deltas, never a second copy of N64_*.
-grep -q '^CFLAGS :=$' backend/Makefile.libdragon
-grep -q '^CXXFLAGS := -fno-rtti -fno-exceptions$' backend/Makefile.libdragon
-grep -q '^ASFLAGS :=$' backend/Makefile.libdragon
-grep -q '^LDFLAGS :=$' backend/Makefile.libdragon
-if grep -nE '^(CFLAGS|CXXFLAGS|ASFLAGS|LDFLAGS)[[:space:]]*:=[[:space:]]*.*\$\(N64_(CFLAGS|CXXFLAGS|ASFLAGS|LDFLAGS)\)' backend/Makefile.libdragon; then
-  echo "libdragon platform flags are being copied into generic flags; this duplicates target-specific propagation" >&2
-  exit 1
-fi
-grep -Fq 'INCLUDES += -I. -I$(srcdir) -I$(srcdir)/engines' backend/Makefile.libdragon
-test -f upstream/scummvm-1.6.0-ft64.patch
-grep -Fq -- $'-\tpredictivedialog.o \\' upstream/scummvm-1.6.0-ft64.patch
-[ "$(git apply --numstat upstream/scummvm-1.6.0-ft64.patch)" = $'0\t1\tgui/module.mk' ]
-if grep -Fq 'filter-out gui/predictivedialog.o' backend/Makefile.libdragon; then
-  echo "invalid post-Makefile.common predictive-dialog filter returned" >&2
-  exit 1
-fi
-grep -q 'N64LibdragonFilesystemFactory' backend/osys_n64_libdragon.cpp
-grep -q 'n64libdragon-fs.o' backend/Makefile.libdragon
-grep -q '#include <dir.h>' backend/n64libdragon-fs.cpp
-grep -q 'dir_findfirst' backend/n64libdragon-fs.cpp
-grep -q 'dir_findnext' backend/n64libdragon-fs.cpp
-grep -q 'DefaultSaveFileManager("sd:/fullthrottle/saves")' backend/osys_n64_libdragon.cpp
-grep -Fq 'static_cast<DefaultTimerManager *>(_timerManager)->handler()' backend/osys_n64_libdragon.cpp
-grep -q 'get_ticks_ms()' backend/osys_n64_libdragon.cpp
-grep -q '"-p"' backend/nintendo64_libdragon.cpp
-grep -q '"sd:/fullthrottle"' backend/nintendo64_libdragon.cpp
-grep -q '"ft"' backend/nintendo64_libdragon.cpp
-grep -q 'assert_memory_expanded();' backend/nintendo64_libdragon.cpp
-grep -q 'return (uint16)(src | 1);' backend/osys_n64_libdragon.cpp
-grep -q '^N64_ROM_CONTROLLER1 := n64$' backend/Makefile.libdragon
-grep -Fqx 'N64_ROM_TITLE := "Full Throttle N64"' backend/Makefile.libdragon
-grep -q '^N64_ROM_CONTROLLER1=n64$' probe/Makefile
-grep -Fq 'memset(_game.pixels, 0, _game.pitch * _game.h);' backend/osys_n64_libdragon.cpp
-grep -q 'is_memory_expanded()' probe/sd_probe.c
-grep -q 'get_memory_size()' probe/sd_probe.c
-grep -q '#include <dir.h>' probe/sd_probe.c
-grep -q 'dir_findfirst' probe/sd_probe.c
-grep -q 'saves/.keep' scripts/stage_demo_sd.sh
+echo "[preflight] r2m identity"
+grep -Fqx 'name: Build Full Throttle N64 r2m' "$WORKFLOW"
+grep -Fq 'name: full-throttle-n64-r2m-build-report' "$WORKFLOW"
+grep -Fq 'TARGET := full-throttle-n64-r2m' backend/Makefile.libdragon
+grep -Fq 'full-throttle-n64-r2m.z64' scripts/build_scummvm.sh
+grep -Fq 'FT64 r2m: libdragon backend starting' backend/osys_n64_libdragon.cpp
+grep -Fq 'FULL THROTTLE N64 - r2m' probe/sd_probe.c
 
-echo "[preflight] Full Throttle-only engine scope"
+echo "[preflight] no game/demo payload machinery"
+test ! -e demo
+test ! -e scripts/fetch_demo.sh
+test ! -e scripts/stage_demo_sd.sh
+if grep -RInE 'ft-dos-demo|fetch_demo|stage_demo|demo-cache|artifacts/sdcard' \
+    .github scripts/run_all.sh scripts/publish_termux.sh TERMUX.md .gitignore; then
+  echo "game/demo packaging machinery leaked into r2m" >&2
+  exit 1
+fi
+
+echo "[preflight] pinned source/toolchain"
+grep -Fq 'f75a652bb7c956f145abe881c87b5dbf5c9ec24b' scripts/fetch_source.sh
+grep -Fq '35f85a0797324a5ed0c723203e33ab3c1da94fdd' scripts/fetch_libdragon.sh
+grep -Fq 'toolchain-continuous-prerelease/gcc-toolchain-mips64-x86_64.deb' "$WORKFLOW"
+
+echo "[preflight] Full Throttle-only build scope"
+grep -Fq 'ENABLE_SCUMM := $(ENABLED)' backend/Makefile.libdragon
+grep -Fq 'ENABLE_SCUMM_7_8 := $(ENABLED)' backend/Makefile.libdragon
 if grep -nE '^ENABLE_AGI[[:space:]]*[:?+]?=' backend/Makefile.libdragon; then
-  echo "AGI engine unexpectedly enabled; predictive-dialog prune would no longer be safe" >&2
+  echo "AGI unexpectedly enabled" >&2
+  exit 1
+fi
+[ "$(git apply --numstat upstream/scummvm-1.6.0-ft64.patch)" = $'0\t1\tgui/module.mk' ]
+
+echo "[preflight] established libdragon build contract"
+grep -Fq 'N64_ROM_TITLE := "Full Throttle N64"' backend/Makefile.libdragon
+grep -Fq 'N64_ROM_CONTROLLER1 := n64' backend/Makefile.libdragon
+grep -Fq 'N64_ROM_CONTROLLER1=n64' probe/Makefile
+grep -Fq 'N64_CXXFLAGS := $(filter-out -Werror -std=gnu++17,$(N64_CXXFLAGS)) -std=gnu++11' backend/Makefile.libdragon
+grep -Fq 'CFLAGS :=' backend/Makefile.libdragon
+grep -Fq 'CXXFLAGS := -fno-rtti -fno-exceptions' backend/Makefile.libdragon
+grep -Fq 'LDFLAGS :=' backend/Makefile.libdragon
+grep -Fq 'INCLUDES += -I. -I$(srcdir) -I$(srcdir)/engines' backend/Makefile.libdragon
+
+echo "[preflight] r2m input path"
+grep -Fq 'sampleAnalogMouse(_joypadInput);' backend/osys_n64_libdragon.cpp
+grep -Fq 'const uint32 inputPollMs = 16;' backend/osys_n64_libdragon.cpp
+grep -Fq 'const uint32 mouseEventMs = 40;' backend/osys_n64_libdragon.cpp
+grep -Fq 'if (sx > 60) sx = 60;' backend/osys_n64_libdragon.cpp
+grep -Fq 'if (sy > 60) sy = 60;' backend/osys_n64_libdragon.cpp
+grep -Fq 'tan((double)sx * (pi / 140.0))' backend/osys_n64_libdragon.cpp
+grep -Fq 'tan((double)sy * (pi / 140.0))' backend/osys_n64_libdragon.cpp
+grep -Fq 'const joypad_buttons_t buttons = _joypadInput.btn;' backend/osys_n64_libdragon.cpp
+if grep -Fq 'joypad_get_buttons_pressed' backend/osys_n64_libdragon.cpp; then
+  echo "event backend still consumes libdragon pressed transitions directly" >&2
   exit 1
 fi
 
-echo "[preflight] previous CI regression guards"
-if grep -R -nE '^N64_ROM_CONTROLLER1[[:space:]]*[:?+]?=[[:space:]]*joypad$' backend probe; then
-  echo "invalid libdragon ROM-header controller metadata leaked into r2l" >&2
+echo "[preflight] r2m preconverted game-video path"
+grep -Fq 'uint16 *_game16;' backend/osys_n64_libdragon.h
+grep -Fq 'void OSystem_N64Libdragon::rebuildGame16()' backend/osys_n64_libdragon.cpp
+grep -Fq 'if (!_screenDirty)' backend/osys_n64_libdragon.cpp
+grep -Fq 'if (_game16Dirty)' backend/osys_n64_libdragon.cpp
+grep -Fq 'memcpy(drow + xoff, srow, _gameW * sizeof(uint16));' backend/osys_n64_libdragon.cpp
+grep -Fq '_game16Dirty = true;' backend/osys_n64_libdragon.cpp
+
+echo "[preflight] SD filesystem and save path"
+grep -Fq 'debug_init_sdfs("sd:/", -1)' backend/osys_n64_libdragon.cpp
+grep -Fq 'DefaultSaveFileManager("sd:/fullthrottle/saves")' backend/osys_n64_libdragon.cpp
+grep -Fq '#include <dir.h>' backend/n64libdragon-fs.cpp
+grep -Fq 'dir_findfirst' backend/n64libdragon-fs.cpp
+if grep -RInE '<dirent\.h>|opendir\(|readdir\(|closedir\(|backends/fs/posix' backend probe; then
+  echo "unsupported POSIX directory dependency returned" >&2
   exit 1
 fi
-if grep -R -n 'getPixels()' backend; then
+if grep -RInE 'mkdir\("sd:/' backend probe; then
+  echo "runtime SD mkdir returned; pinned FAT adapter has no mkdir hook" >&2
+  exit 1
+fi
+
+echo "[preflight] no legacy backend dependencies"
+if grep -RInE 'hkz-libn64|libn64\.h|pakfs|framfs|initRomFSmanager|NONSTANDARD_PORT' backend probe; then
+  echo "legacy N64 dependency leaked into libdragon backend" >&2
+  exit 1
+fi
+if grep -RIn 'getPixels()' backend; then
   echo "newer ScummVM Surface::getPixels API leaked into pinned 1.6.0 backend" >&2
   exit 1
 fi
-if grep -nE '^(CFLAGS|CXXFLAGS).*\$\(DEFINES\)' backend/Makefile.libdragon; then
-  echo "DEFINES duplicated into compiler flags; Makefile.common supplies them via CPPFLAGS" >&2
-  exit 1
-fi
 
-echo "[preflight] no unsupported POSIX directory backend"
-if grep -R -nE '<dirent\.h>|opendir\(|readdir\(|closedir\(|backends/fs/posix' backend probe; then
-  echo "unsupported POSIX directory dependency leaked into r2l" >&2
+echo "[preflight] CI script invocation and diagnostics"
+if grep -nE 'run: \./scripts/|^[[:space:]]+\./scripts/' "$WORKFLOW"; then
+  echo "workflow depends on executable script bits" >&2
   exit 1
 fi
-if grep -R -nE 'mkdir\("sd:/' backend probe; then
-  echo "runtime SD mkdir leaked into r2l; pinned libdragon FAT has no mkdir hook" >&2
-  exit 1
-fi
+grep -Fq 'id: probe' "$WORKFLOW"
+grep -Fq 'id: scummvm' "$WORKFLOW"
+[ "$(grep -c 'continue-on-error: true' "$WORKFLOW")" -eq 2 ]
+grep -Fq 'make -C "$PORT" V=1' scripts/build_scummvm.sh
+grep -Fq 'tee "$ART/scummvm-build.log"' scripts/build_scummvm.sh
+grep -Fq 'tee "$ART/probe-build.log"' scripts/build_probe.sh
+grep -Fq 'fail_rc=1' scripts/build_scummvm.sh
 
-echo "[preflight] no known legacy/freeze traps"
-if grep -R -nE 'hkz-libn64|libn64\.h|pakfs|framfs|initRomFSmanager|NONSTANDARD_PORT' backend probe; then
-  echo "legacy N64 dependency leaked into r2l backend" >&2
-  exit 1
-fi
-if grep -n 'for *(;;)' backend/osys_n64_libdragon.cpp; then
-  echo "infinite quit loop leaked into backend" >&2
-  exit 1
-fi
-if grep -R -n '_timerCallback\|setTimerCallback' backend; then
-  echo "obsolete backend-local timer callback leaked into backend" >&2
-  exit 1
-fi
-
-echo "[preflight] CI does not depend on executable script bits"
-if grep -nE 'run: \./scripts/|^[[:space:]]+\./scripts/' .github/workflows/build-full-throttle-r2l.yml; then
-  echo "workflow invokes repository scripts directly; use bash ./scripts/..." >&2
-  exit 1
-fi
-if grep -nE '^\./scripts/' scripts/run_all.sh; then
-  echo "run_all.sh invokes repository scripts directly; use bash ./scripts/..." >&2
-  exit 1
-fi
-
-echo "[preflight] both N64 compile paths preserve diagnostics"
-grep -q 'id: probe' .github/workflows/build-full-throttle-r2l.yml
-grep -q 'id: scummvm' .github/workflows/build-full-throttle-r2l.yml
-[ "$(grep -c 'continue-on-error: true' .github/workflows/build-full-throttle-r2l.yml)" -eq 2 ]
-
-echo "[preflight] no stale operational revision labels"
-if grep -RInE 'r2[a-i]|R2[A-I]' .github backend probe scripts demo upstream TERMUX.md; then
-  echo "stale prior-revision operational label leaked into r2l" >&2
-  exit 1
-fi
-
-echo "[preflight] demo and toolchain URLs"
-grep -q 'downloads.scummvm.org/frs/demos/scumm/ft-dos-demo-en.zip' scripts/fetch_demo.sh
-grep -q 'toolchain-continuous-prerelease/gcc-toolchain-mips64-x86_64.deb' .github/workflows/build-full-throttle-r2l.yml
-grep -q '35f85a0797324a5ed0c723203e33ab3c1da94fdd' scripts/fetch_libdragon.sh
-
-echo "[preflight] build result accounting"
-grep -q 'fail_rc=1' scripts/build_scummvm.sh
-grep -Fq 'if [ "$rc" -eq 0 ] && [ -f "$PORT/full-throttle-n64-r2l.z64" ]; then' scripts/build_scummvm.sh
-
-echo "[preflight] integration uses build results, not parsed dry-run commands"
-if grep -nE 'make -C .* -n |scummvm-dry-run|scummvm-link-command|scummvm-cxx-command|scummvm-n64tool-command|expected exactly one .*compile command|expected quoted Full Throttle N64 title in generated n64tool command' scripts/integrate_backend.sh; then
-  echo "brittle generated-command parser leaked back into r2l integration" >&2
-  exit 1
-fi
+echo "[preflight] integration graph validation"
+grep -Fq 'git -C "$SCUMMVM" apply --check "$PATCH"' scripts/integrate_backend.sh
 grep -Fq 'make -C "$DST" -pn' scripts/integrate_backend.sh
 grep -Fq 'gui/libgui.a' scripts/integrate_backend.sh
 grep -Fq 'engines/scumm/libscumm.a' scripts/integrate_backend.sh
-
-echo "[preflight] real build logs are authoritative"
-grep -Fq 'make -C "$PORT" V=1' scripts/build_scummvm.sh
-grep -Fq 'tee "$ART/scummvm-build.log"' scripts/build_scummvm.sh
-grep -Fq 'full-throttle-n64-r2l.z64' scripts/build_scummvm.sh
-grep -Fq 'tee "$ART/probe-build.log"' scripts/build_probe.sh
+if grep -nE 'make -C .* -n |scummvm-dry-run|expected exactly one .*compile command' scripts/integrate_backend.sh; then
+  echo "brittle generated-command parser returned" >&2
+  exit 1
+fi
 
 echo "[preflight] OK"

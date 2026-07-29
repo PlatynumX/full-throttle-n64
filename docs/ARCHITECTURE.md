@@ -1,50 +1,54 @@
-# r2l architecture
+# r2m architecture
 
-## Engine
-
-```text
-ScummVM 1.6.0 @ f75a652bb7c956f145abe881c87b5dbf5c9ec24b
-    |
-    +-- SCUMM
-         +-- SCUMM v7/v8
-              +-- SMUSH
-              +-- INSANE
-              +-- iMUSE Digital
-```
-
-The build is intentionally Full Throttle-only. It is not an attempt to restore every ScummVM engine on N64.
-
-## Platform
+## Runtime data path
 
 ```text
-OSystem_N64Libdragon
-    |
-    +-- video: 320x240 libdragon display, 16-bit output
-    +-- audio: libdragon audio buffers
-    +-- input: libdragon joypad
-    +-- timer: libdragon tick source, ScummVM timer manager pumped outside IRQ context
-    +-- files: native N64LibdragonFilesystemNode + libdragon dir API
-    +-- streams: stdio over mounted sd:/
-    +-- saves: sd:/fullthrottle/saves/
-    +-- debug: libdragon USB/emulator logging
+SummerCart SD
+  sd:/fullthrottle/
+          |
+          v
+libdragon FAT / stdio
+          |
+          v
+ScummVM 1.6.0 SCUMM v7
+          |
+          v
+Full Throttle
 ```
 
-## Source integration
+No game-data payload is part of CI or the build artifact.
 
-Every build fetches a pristine pinned ScummVM tree. Complete platform source files are copied from `backend/` into a new `backends/platform/n64libdragon/` directory.
+## Video
 
-One upstream patch removes the AGI-only predictive-input object from `gui/module.mk` before module archive rules are created. The generated make database is audited before compilation.
+ScummVM renders its normal 8-bit CLUT game surface. The N64 backend maintains a
+second 16-bit converted surface. Rectangle updates update both surfaces while
+the palette is stable; palette changes and direct surface writes mark the
+converted surface for rebuild. `updateScreen()` copies the 16-bit surface to a
+libdragon display buffer and draws the cursor.
 
-## Standalone probe
+This follows the two-buffer design used by the historical official ScummVM N64
+backend while retaining libdragon display ownership.
 
-`ft64-sd-probe.z64` proves the hardware/platform layer independently. It initializes video, controller and audio, mounts `sd:/`, enumerates `sd:/fullthrottle/`, and performs a file write/read test in the existing directory.
+## Input
 
-This lets us distinguish a SummerCart/libdragon failure from a ScummVM engine/backend failure.
+libdragon reads Joybus devices asynchronously during VI. The backend
+synchronizes a cached controller state at a bounded frame cadence, applies the
+historical N64 analog-to-pointer curve to floating-point accumulated
+coordinates, and emits pointer motion every 40 ms.
 
-## First runtime risks after a successful link
+Digital button edges are derived from current versus retained button state,
+rather than consuming libdragon transition helpers on every ScummVM event
+poll.
 
-Once the demo boots, the next unknowns become measured runtime behavior rather than build speculation: SMUSH decoding throughput, iMUSE Digital mixing load, INSANE sequences, memory pressure, SD streaming behavior and save/load behavior.
+## Audio/timers
 
-## Build flag ownership
+r2m does not change r2l audio configuration or timer servicing. Audio remains
+22050 Hz with three libdragon buffers. The ScummVM timer manager continues to
+be serviced from normal backend execution rather than interrupt context.
 
-Pinned libdragon `n64.mk` owns N64 platform compiler, assembler and linker flags through its `%.z64` target-specific variables. The ScummVM backend does not copy those variables into global `CFLAGS`, `CXXFLAGS`, `ASFLAGS` or `LDFLAGS`; it adds only backend-specific deltas. This avoids duplicate toolchain flags and duplicate `n64.ld` linker scripts.
+## Source policy
+
+ScummVM is reset to the pinned v1.6.0 commit on every build. The only upstream
+source patch is the existing one-file removal of unused AGI predictive-dialog
+code from `gui/module.mk`. The r2m runtime work lives directly in the
+`n64libdragon` backend source, not in a new mutation script or stacked patch.

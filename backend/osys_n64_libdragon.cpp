@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <math.h>
 
 static const OSystem::GraphicsMode s_modes[] = {
     { "320x240", "320x240", 0 },
@@ -22,15 +23,17 @@ static inline uint16 rgba5551(byte r, byte g, byte b) {
 }
 
 OSystem_N64Libdragon::OSystem_N64Libdragon()
-    : _mixer(0), _overlay(0), _cursor(0), _cursorW(0), _cursorH(0),
+    : _mixer(0), _game16(0), _overlay(0), _cursor(0), _cursorW(0), _cursorH(0),
       _cursorKey(0), _cursorHotX(0), _cursorHotY(0),
       _cursorUsesGamePalette(true), _gameW(320), _gameH(200),
-      _mouseX(160), _mouseY(100), _shake(0), _overlayVisible(false),
-      _mouseVisible(false), _graphicsMode(0), _timerNext(0) {
+      _mouseX(160), _mouseY(100), _mouseAccumX(160.0f), _mouseAccumY(100.0f),
+      _shake(0), _overlayVisible(false), _mouseVisible(false), _graphicsMode(0),
+      _timerNext(0), _joypadLastPoll(0), _mouseLastEvent(0),
+      _joypadStateValid(false), _game16Dirty(true), _screenDirty(true) {
 
     debug_init(DEBUG_FEATURE_LOG_USB | DEBUG_FEATURE_LOG_EMU);
     bool sd = debug_init_sdfs("sd:/", -1);
-    debugf("FT64 r2l: libdragon backend starting; sdfs=%d\n", sd ? 1 : 0);
+    debugf("FT64 r2m: libdragon backend starting; sdfs=%d\n", sd ? 1 : 0);
 
     display_init(RESOLUTION_320x240, DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE);
     joypad_init();
@@ -38,10 +41,13 @@ OSystem_N64Libdragon::OSystem_N64Libdragon()
     audio_init(kAudioHz, 3);
 
     _game.create(_gameW, _gameH, Graphics::PixelFormat::createFormatCLUT8());
+    _game16 = (uint16 *)calloc(_gameW * _gameH, sizeof(uint16));
     _overlay = (uint16 *)calloc(kScreenW * kScreenH, sizeof(uint16));
     memset(_palette, 0, sizeof(_palette));
     memset(_exactPalette, 0, sizeof(_exactPalette));
     memset(_cursorPalette, 0, sizeof(_cursorPalette));
+    memset(&_joypadInput, 0, sizeof(_joypadInput));
+    memset(&_lastButtons, 0, sizeof(_lastButtons));
 
     _fsFactory = new N64LibdragonFilesystemFactory();
 }
@@ -51,6 +57,8 @@ OSystem_N64Libdragon::~OSystem_N64Libdragon() {
     _mixer = 0;
     if (_cursor) free(_cursor);
     _cursor = 0;
+    if (_game16) free(_game16);
+    _game16 = 0;
     if (_overlay) free(_overlay);
     _overlay = 0;
     _game.free();
@@ -75,7 +83,7 @@ void OSystem_N64Libdragon::initBackend() {
 
     EventsBaseBackend::initBackend();
 
-    debugf("FT64 r2l: backend init complete; audio=%d Hz buffer=%d\n",
+    debugf("FT64 r2m: backend init complete; audio=%d Hz buffer=%d\n",
            audio_get_frequency(), audio_get_buffer_length());
 }
 
@@ -84,8 +92,10 @@ bool OSystem_N64Libdragon::hasFeature(Feature f) {
 }
 
 void OSystem_N64Libdragon::setFeatureState(Feature f, bool enable) {
-    if (f == kFeatureCursorPalette)
+    if (f == kFeatureCursorPalette) {
         _cursorUsesGamePalette = !enable;
+        _screenDirty = true;
+    }
 }
 
 bool OSystem_N64Libdragon::getFeatureState(Feature f) {
@@ -119,13 +129,21 @@ void OSystem_N64Libdragon::initSize(uint width, uint height, const Graphics::Pix
     height = std::min<uint>(height, kScreenH);
 
     _game.free();
+    if (_game16) free(_game16);
+    _game16 = 0;
+
     _gameW = (int)width;
     _gameH = (int)height;
     _game.create(_gameW, _gameH, Graphics::PixelFormat::createFormatCLUT8());
     memset(_game.pixels, 0, _game.pitch * _game.h);
+    _game16 = (uint16 *)calloc(_gameW * _gameH, sizeof(uint16));
 
     _mouseX = _gameW / 2;
     _mouseY = _gameH / 2;
+    _mouseAccumX = (float)_mouseX;
+    _mouseAccumY = (float)_mouseY;
+    _game16Dirty = true;
+    _screenDirty = true;
 }
 
 int16 OSystem_N64Libdragon::getHeight() { return (int16)_gameH; }
@@ -139,6 +157,13 @@ void OSystem_N64Libdragon::setPalette(const byte *colors, uint start, uint num) 
         const byte *c = colors + i * 3;
         _palette[start + i] = rgba5551(c[0], c[1], c[2]);
     }
+
+    // Match the historical N64 backend's two-buffer strategy: keep the
+    // palettized ScummVM surface and a preconverted 16-bit N64 surface.
+    // Palette changes invalidate the converted surface once, rather than
+    // forcing a palette lookup for every pixel during display presentation.
+    _game16Dirty = true;
+    _screenDirty = true;
 }
 
 void OSystem_N64Libdragon::grabPalette(byte *colors, uint start, uint num) {
@@ -156,20 +181,48 @@ void OSystem_N64Libdragon::copyRectToScreen(const void *buf, int pitch,
     if (y + h > _gameH) h = _gameH - y;
     if (w <= 0 || h <= 0) return;
 
+    bool changed = false;
     for (int row = 0; row < h; ++row) {
-        memcpy((byte *)_game.getBasePtr(x, y + row), src + row * pitch, w);
+        const byte *srow = src + row * pitch;
+        byte *drow = (byte *)_game.getBasePtr(x, y + row);
+        uint16 *hrow = _game16 ? (_game16 + (y + row) * _gameW + x) : 0;
+
+        for (int col = 0; col < w; ++col) {
+            const byte p = srow[col];
+            if (drow[col] == p)
+                continue;
+
+            drow[col] = p;
+            if (!_game16Dirty && hrow)
+                hrow[col] = _palette[p];
+            changed = true;
+        }
     }
+
+    if (changed)
+        _screenDirty = true;
 }
 
-uint16 OSystem_N64Libdragon::palettePixel(byte idx) const {
-    return _palette[idx];
+void OSystem_N64Libdragon::rebuildGame16() {
+    if (!_game16)
+        return;
+
+    for (int y = 0; y < _gameH; ++y) {
+        const byte *src = (const byte *)_game.getBasePtr(0, y);
+        uint16 *dst = _game16 + y * _gameW;
+        for (int x = 0; x < _gameW; ++x)
+            dst[x] = _palette[src[x]];
+    }
+
+    _game16Dirty = false;
 }
 
 uint16 OSystem_N64Libdragon::overlayPixel(uint16 src) const {
-    /* On __N64__, ScummVM's 555 overlay is already RRRRRGGGGGBBBBB0.
-       libdragon RGBA5551 uses the same color-bit placement; set alpha opaque. */
+    /* ScummVM 1.6.0's N64 555 format places RGB in the same bits as
+       libdragon RGBA5551 but has no alpha bit. Mark framebuffer pixels opaque. */
     return (uint16)(src | 1);
 }
+
 
 void OSystem_N64Libdragon::drawCursor(surface_t *dst, int xoff, int yoff) {
     if (!_mouseVisible || !_cursor || !_cursorW || !_cursorH) return;
@@ -227,11 +280,14 @@ void OSystem_N64Libdragon::updateScreen() {
     serviceAudio();
     serviceTimer();
 
+    if (!_screenDirty)
+        return;
+
+    if (_game16Dirty)
+        rebuildGame16();
+
     surface_t *dst = display_get();
-    for (int y = 0; y < kScreenH; ++y) {
-        uint16 *drow = (uint16 *)((byte *)dst->buffer + y * dst->stride);
-        memset(drow, 0, kScreenW * sizeof(uint16));
-    }
+    serviceAudio();
 
     if (_overlayVisible) {
         for (int y = 0; y < kScreenH; ++y) {
@@ -242,33 +298,73 @@ void OSystem_N64Libdragon::updateScreen() {
         }
         drawCursor(dst, 0, 0);
     } else {
-        int xoff = (kScreenW - _gameW) / 2;
-        int yoff = (kScreenH - _gameH) / 2;
+        const int xoff = (kScreenW - _gameW) / 2;
+        const int yoff = (kScreenH - _gameH) / 2;
         const int srcStartY = std::min<int>(std::max<int>(_shake, 0), _gameH);
+        const int visibleH = _gameH - srcStartY;
+        const int gameTop = yoff;
+        const int gameBottom = yoff + visibleH;
 
-        for (int y = srcStartY; y < _gameH; ++y) {
-            int dy = yoff + y - srcStartY;
-            if (dy < 0 || dy >= kScreenH) continue;
-            uint16 *drow = (uint16 *)((byte *)dst->buffer + dy * dst->stride);
-            const byte *srow = (const byte *)_game.getBasePtr(0, y);
-            for (int x = 0; x < _gameW; ++x)
-                drow[xoff + x] = palettePixel(srow[x]);
+        for (int y = 0; y < kScreenH; ++y) {
+            uint16 *drow = (uint16 *)((byte *)dst->buffer + y * dst->stride);
+            if (y < gameTop || y >= gameBottom) {
+                memset(drow, 0, kScreenW * sizeof(uint16));
+                continue;
+            }
+
+            const int sy = srcStartY + (y - gameTop);
+            const uint16 *srow = _game16 + sy * _gameW;
+
+            if (xoff > 0)
+                memset(drow, 0, xoff * sizeof(uint16));
+            memcpy(drow + xoff, srow, _gameW * sizeof(uint16));
+            const int right = xoff + _gameW;
+            if (right < kScreenW)
+                memset(drow + right, 0, (kScreenW - right) * sizeof(uint16));
         }
+
         drawCursor(dst, xoff, yoff - srcStartY);
     }
 
     display_show(dst);
+    _screenDirty = false;
 }
 
 Graphics::Surface *OSystem_N64Libdragon::lockScreen() { return &_game; }
-void OSystem_N64Libdragon::unlockScreen() {}
-void OSystem_N64Libdragon::setShakePos(int shakeOffset) { _shake = shakeOffset; }
 
-void OSystem_N64Libdragon::showOverlay() { _overlayVisible = true; }
-void OSystem_N64Libdragon::hideOverlay() { _overlayVisible = false; }
+void OSystem_N64Libdragon::unlockScreen() {
+    // Direct writers bypass copyRectToScreen(), so the converted copy must be
+    // rebuilt before the next presentation.
+    _game16Dirty = true;
+    _screenDirty = true;
+}
+
+void OSystem_N64Libdragon::setShakePos(int shakeOffset) {
+    if (_shake != shakeOffset) {
+        _shake = shakeOffset;
+        _screenDirty = true;
+    }
+}
+
+void OSystem_N64Libdragon::showOverlay() {
+    _overlayVisible = true;
+    clampMouse();
+    _mouseAccumX = (float)_mouseX;
+    _mouseAccumY = (float)_mouseY;
+    _screenDirty = true;
+}
+
+void OSystem_N64Libdragon::hideOverlay() {
+    _overlayVisible = false;
+    clampMouse();
+    _mouseAccumX = (float)_mouseX;
+    _mouseAccumY = (float)_mouseY;
+    _screenDirty = true;
+}
 
 void OSystem_N64Libdragon::clearOverlay() {
     memset(_overlay, 0, kScreenW * kScreenH * sizeof(uint16));
+    _screenDirty = true;
 }
 
 void OSystem_N64Libdragon::grabOverlay(void *buf, int pitch) {
@@ -289,6 +385,7 @@ void OSystem_N64Libdragon::copyRectToOverlay(const void *buf, int pitch,
     for (int row = 0; row < h; ++row)
         memcpy(_overlay + (y + row) * kScreenW + x,
                src + row * pitch, w * sizeof(uint16));
+    _screenDirty = true;
 }
 
 int16 OSystem_N64Libdragon::getOverlayHeight() { return kScreenH; }
@@ -296,19 +393,33 @@ int16 OSystem_N64Libdragon::getOverlayWidth() { return kScreenW; }
 
 bool OSystem_N64Libdragon::showMouse(bool visible) {
     bool old = _mouseVisible;
-    _mouseVisible = visible;
+    if (_mouseVisible != visible) {
+        _mouseVisible = visible;
+        _screenDirty = true;
+    }
     return old;
 }
 
+int OSystem_N64Libdragon::mouseMaxX() const {
+    return _overlayVisible ? kScreenW : _gameW;
+}
+
+int OSystem_N64Libdragon::mouseMaxY() const {
+    return _overlayVisible ? kScreenH : _gameH;
+}
+
 void OSystem_N64Libdragon::clampMouse() {
-    _mouseX = std::max<int>(0, std::min<int>(_mouseX, _gameW - 1));
-    _mouseY = std::max<int>(0, std::min<int>(_mouseY, _gameH - 1));
+    _mouseX = std::max<int>(0, std::min<int>(_mouseX, mouseMaxX() - 1));
+    _mouseY = std::max<int>(0, std::min<int>(_mouseY, mouseMaxY() - 1));
 }
 
 void OSystem_N64Libdragon::warpMouse(int x, int y) {
     _mouseX = x;
     _mouseY = y;
     clampMouse();
+    _mouseAccumX = (float)_mouseX;
+    _mouseAccumY = (float)_mouseY;
+    _screenDirty = true;
 }
 
 void OSystem_N64Libdragon::setMouseCursor(const void *buf, uint w, uint h,
@@ -331,6 +442,7 @@ void OSystem_N64Libdragon::setMouseCursor(const void *buf, uint w, uint h,
         if (_cursor)
             memcpy(_cursor, buf, w * h);
     }
+    _screenDirty = true;
 }
 
 void OSystem_N64Libdragon::setCursorPalette(const byte *colors, uint start, uint num) {
@@ -341,6 +453,34 @@ void OSystem_N64Libdragon::setCursorPalette(const byte *colors, uint start, uint
         _cursorPalette[start + i] = rgba5551(c[0], c[1], c[2]);
     }
     _cursorUsesGamePalette = false;
+    _screenDirty = true;
+}
+
+void OSystem_N64Libdragon::sampleAnalogMouse(const joypad_inputs_t &in) {
+    int sx = in.stick_x;
+    int sy = in.stick_y;
+
+    // Match the historical ScummVM N64 backend's controller curve. It clamps
+    // the useful N64 stick range to +/-60, applies a one-unit deadzone, and
+    // uses tangent acceleration. That backend sampled this from VI cadence.
+    if (sx > 60) sx = 60;
+    else if (sx < -60) sx = -60;
+    if (sy > 60) sy = 60;
+    else if (sy < -60) sy = -60;
+
+    const int deadzone = 1;
+    const double pi = 3.14159265358979323846;
+    if (sx > deadzone || sx < -deadzone)
+        _mouseAccumX += (float)tan((double)sx * (pi / 140.0));
+    if (sy > deadzone || sy < -deadzone)
+        _mouseAccumY -= (float)tan((double)sy * (pi / 140.0));
+
+    const float maxX = (float)(mouseMaxX() - 1);
+    const float maxY = (float)(mouseMaxY() - 1);
+    if (_mouseAccumX < 0.0f) _mouseAccumX = 0.0f;
+    if (_mouseAccumY < 0.0f) _mouseAccumY = 0.0f;
+    if (_mouseAccumX > maxX) _mouseAccumX = maxX;
+    if (_mouseAccumY > maxY) _mouseAccumY = maxY;
 }
 
 static void keyEvent(Common::Event &event, Common::EventType type,
@@ -355,61 +495,80 @@ bool OSystem_N64Libdragon::pollEvent(Common::Event &event) {
     serviceAudio();
     serviceTimer();
 
-    joypad_poll();
-    joypad_inputs_t in = joypad_get_inputs(JOYPAD_PORT_1);
-    joypad_buttons_t down = joypad_get_buttons_pressed(JOYPAD_PORT_1);
-    joypad_buttons_t up = joypad_get_buttons_released(JOYPAD_PORT_1);
+    const uint32 now = getMillis();
 
-    static int lastX = -1, lastY = -1;
-    const int dead = 12;
-    if (in.stick_x > dead || in.stick_x < -dead)
-        _mouseX += in.stick_x / 16;
-    if (in.stick_y > dead || in.stick_y < -dead)
-        _mouseY -= in.stick_y / 16;
-    clampMouse();
+    // libdragon reads Joypads asynchronously from VI. Its public contract says
+    // joypad_poll() should synchronize that state once per frame. ScummVM may
+    // drain pollEvent() many times in one frame, so do not re-apply analog
+    // motion on every drain iteration.
+    const uint32 inputPollMs = 16;
+    if (!_joypadStateValid || (uint32)(now - _joypadLastPoll) >= inputPollMs) {
+        joypad_poll();
+        _joypadInput = joypad_get_inputs(JOYPAD_PORT_1);
+        _joypadLastPoll = now;
+        _joypadStateValid = true;
+        sampleAnalogMouse(_joypadInput);
+    }
 
-    if (_mouseX != lastX || _mouseY != lastY) {
-        lastX = _mouseX;
-        lastY = _mouseY;
-        event.type = Common::EVENT_MOUSEMOVE;
+    const joypad_buttons_t buttons = _joypadInput.btn;
+
+    if (buttons.z != _lastButtons.z) {
+        event.type = buttons.z ? Common::EVENT_LBUTTONDOWN : Common::EVENT_LBUTTONUP;
         event.mouse.x = _mouseX;
         event.mouse.y = _mouseY;
+        _lastButtons = buttons;
+        return true;
+    }
+    if (buttons.b != _lastButtons.b) {
+        event.type = buttons.b ? Common::EVENT_RBUTTONDOWN : Common::EVENT_RBUTTONUP;
+        event.mouse.x = _mouseX;
+        event.mouse.y = _mouseY;
+        _lastButtons = buttons;
+        return true;
+    }
+    if (buttons.start != _lastButtons.start) {
+        keyEvent(event,
+                 buttons.start ? Common::EVENT_KEYDOWN : Common::EVENT_KEYUP,
+                 Common::KEYCODE_F5, Common::ASCII_F5);
+        _lastButtons = buttons;
+        return true;
+    }
+    if (buttons.l != _lastButtons.l) {
+        keyEvent(event,
+                 buttons.l ? Common::EVENT_KEYDOWN : Common::EVENT_KEYUP,
+                 Common::KEYCODE_ESCAPE, Common::ASCII_ESCAPE);
+        _lastButtons = buttons;
+        return true;
+    }
+    if (buttons.a != _lastButtons.a) {
+        keyEvent(event,
+                 buttons.a ? Common::EVENT_KEYDOWN : Common::EVENT_KEYUP,
+                 Common::KEYCODE_PERIOD, '.');
+        _lastButtons = buttons;
         return true;
     }
 
-    if (down.z || up.z) {
-        event.type = down.z ? Common::EVENT_LBUTTONDOWN : Common::EVENT_LBUTTONUP;
-        event.mouse.x = _mouseX; event.mouse.y = _mouseY;
-        return true;
-    }
-    if (down.b || up.b) {
-        event.type = down.b ? Common::EVENT_RBUTTONDOWN : Common::EVENT_RBUTTONUP;
-        event.mouse.x = _mouseX; event.mouse.y = _mouseY;
-        return true;
-    }
-    if (down.start) {
-        keyEvent(event, Common::EVENT_KEYDOWN, Common::KEYCODE_F5, Common::ASCII_F5);
-        return true;
-    }
-    if (up.start) {
-        keyEvent(event, Common::EVENT_KEYUP, Common::KEYCODE_F5, Common::ASCII_F5);
-        return true;
-    }
-    if (down.l) {
-        keyEvent(event, Common::EVENT_KEYDOWN, Common::KEYCODE_ESCAPE, Common::ASCII_ESCAPE);
-        return true;
-    }
-    if (up.l) {
-        keyEvent(event, Common::EVENT_KEYUP, Common::KEYCODE_ESCAPE, Common::ASCII_ESCAPE);
-        return true;
-    }
-    if (down.a) {
-        keyEvent(event, Common::EVENT_KEYDOWN, Common::KEYCODE_PERIOD, '.');
-        return true;
-    }
-    if (up.a) {
-        keyEvent(event, Common::EVENT_KEYUP, Common::KEYCODE_PERIOD, '.');
-        return true;
+    _lastButtons = buttons;
+
+    // The historical N64 port emitted pointer changes at a bounded 40 ms
+    // cadence after accumulating VI-sampled analog movement.
+    const uint32 mouseEventMs = 40;
+    if (!_mouseLastEvent || (uint32)(now - _mouseLastEvent) >= mouseEventMs) {
+        _mouseLastEvent = now;
+        const int nextX = (int)_mouseAccumX;
+        const int nextY = (int)_mouseAccumY;
+
+        if (nextX != _mouseX || nextY != _mouseY) {
+            _mouseX = nextX;
+            _mouseY = nextY;
+            clampMouse();
+            _screenDirty = true;
+
+            event.type = Common::EVENT_MOUSEMOVE;
+            event.mouse.x = _mouseX;
+            event.mouse.y = _mouseY;
+            return true;
+        }
     }
 
     return false;
@@ -433,7 +592,7 @@ void OSystem_N64Libdragon::unlockMutex(MutexRef mutex) { (void)mutex; }
 void OSystem_N64Libdragon::deleteMutex(MutexRef mutex) { (void)mutex; }
 
 void OSystem_N64Libdragon::quit() {
-    debugf("FT64 r2l: quit requested\n");
+    debugf("FT64 r2m: quit requested\n");
 }
 
 Common::String OSystem_N64Libdragon::getDefaultConfigFileName() {

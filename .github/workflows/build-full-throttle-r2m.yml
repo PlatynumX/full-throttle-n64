@@ -1,15 +1,14 @@
-name: Build Full Throttle N64 r2l
+name: Build Full Throttle N64 r2m
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - ".github/workflows/build-full-throttle-r2l.yml"
+      - ".github/workflows/build-full-throttle-r2m.yml"
       - "backend/**"
       - "probe/**"
       - "scripts/**"
       - "docs/**"
-      - "demo/**"
       - "upstream/**"
       - ".gitattributes"
 
@@ -28,9 +27,7 @@ jobs:
       - name: Host prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential bzip2 ca-certificates curl file git \
-            libmpc-dev libmpfr-dev make python3 texinfo unzip wget zlib1g-dev
+          sudo apt-get install -y             build-essential bzip2 ca-certificates curl file git             libmpc-dev libmpfr-dev make python3 texinfo unzip wget zlib1g-dev
 
       - name: Preflight
         run: bash ./scripts/preflight.sh
@@ -41,26 +38,20 @@ jobs:
           bash ./scripts/fetch_source.sh | tee artifacts/scummvm-source.txt
           bash ./scripts/fetch_libdragon.sh | tee artifacts/libdragon-source.txt
 
-      - name: Fetch and stage official Full Throttle demo
-        run: |
-          bash ./scripts/fetch_demo.sh
-          bash ./scripts/stage_demo_sd.sh
-
       - name: Install current prebuilt libdragon toolchain
         run: |
-          curl -fL --retry 5 --retry-all-errors \
-            -o /tmp/gcc-toolchain-mips64-x86_64.deb \
-            https://github.com/DragonMinded/libdragon/releases/download/toolchain-continuous-prerelease/gcc-toolchain-mips64-x86_64.deb
+          curl -fL --retry 5 --retry-all-errors             -o /tmp/gcc-toolchain-mips64-x86_64.deb             https://github.com/DragonMinded/libdragon/releases/download/toolchain-continuous-prerelease/gcc-toolchain-mips64-x86_64.deb
           sudo dpkg -i /tmp/gcc-toolchain-mips64-x86_64.deb
           export N64_INST=/opt/libdragon
           export PATH="$N64_INST/bin:$PATH"
           echo "N64_INST=$N64_INST" >> "$GITHUB_ENV"
           echo "$N64_INST/bin" >> "$GITHUB_PATH"
           mips64-elf-gcc --version > artifacts/toolchain-version-full.txt
-          sed -n '1p' artifacts/toolchain-version-full.txt | tee artifacts/toolchain-version.txt
+          sed -n '1p' artifacts/toolchain-version-full.txt > artifacts/toolchain-version.txt
+          cat artifacts/toolchain-version.txt
           bash ./scripts/build_libdragon.sh
 
-      - name: Integrate r2l backend
+      - name: Integrate r2m backend
         run: bash ./scripts/integrate_backend.sh
 
       - name: Build standalone SummerCart SD probe
@@ -83,25 +74,22 @@ jobs:
             echo
             echo "Artifact files:"
             find artifacts -type f -printf '%P %s bytes\n' | sort
-          } > artifacts/r2l-summary.txt
+          } > artifacts/r2m-summary.txt
 
           if [ -d work/scummvm/.git ]; then
-            git -C work/scummvm diff --check \
-              > artifacts/scummvm-git-diff-check.txt 2>&1 || true
-            git -C work/scummvm status --short \
-              > artifacts/scummvm-git-status.txt || true
+            git -C work/scummvm diff --check               > artifacts/scummvm-git-diff-check.txt 2>&1 || true
+            git -C work/scummvm status --short               > artifacts/scummvm-git-status.txt || true
           fi
 
           if [ -d work/libdragon/.git ]; then
-            git -C work/libdragon rev-parse HEAD \
-              > artifacts/libdragon-commit.txt || true
+            git -C work/libdragon rev-parse HEAD               > artifacts/libdragon-commit.txt || true
           fi
 
-      - name: Upload r2l ROMs, demo payload, and diagnostics
+      - name: Upload r2m ROMs and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: full-throttle-n64-r2l-build-report
+          name: full-throttle-n64-r2m-build-report
           path: artifacts/
           if-no-files-found: error
           retention-days: 30
@@ -111,5 +99,5 @@ jobs:
         run: |
           echo "Probe outcome: ${{ steps.probe.outcome }}"
           echo "ScummVM outcome: ${{ steps.scummvm.outcome }}"
-          echo "Both logs were preserved in the r2l build-report artifact."
+          echo "Both logs were preserved in the r2m build-report artifact."
           exit 1

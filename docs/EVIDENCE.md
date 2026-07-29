@@ -1,140 +1,83 @@
-# Evidence / design notes — r2l
+# Evidence / design notes — r2m
 
-## Pinned sources
+## Hardware observation
 
-ScummVM is pinned to tag `v1.6.0`, resolved and checked against commit:
+The r2l ROM built and booted on real Nintendo 64 hardware with an Expansion
+Pak and SummerCart. Full Throttle loaded from `sd:/fullthrottle/` and began
+playing its opening movie. Hardware testing then reported:
 
-```text
-f75a652bb7c956f145abe881c87b5dbf5c9ec24b
-```
+- SMUSH movie playback stutters.
+- The analog stick does not appear to act as the mouse.
 
-libdragon is pinned to:
+Those observations are the reason for the r2m runtime pass. r2m does not claim
+either issue is solved until another hardware test confirms it.
 
-```text
-35f85a0797324a5ed0c723203e33ab3c1da94fdd
-```
+## Historical ScummVM N64 analog behavior
 
-The build refuses to continue if the fetched ScummVM tag resolves to any other commit.
+Pinned reference:
+https://raw.githubusercontent.com/scummvm/scummvm/v1.6.0/backends/platform/n64/osys_n64_events.cpp
 
-## Full Throttle engine scope
+The official N64 backend:
 
-ScummVM 1.6.0's SCUMM module has a separate `ENABLE_SCUMM_7_8` gate. That gate adds the v7/v8 objects used by Full Throttle, including iMUSE Digital, INSANE and SMUSH.
+- defines `PAD_DEADZONE` as 1 and `PAD_CHECK_TIME` as 40 ms;
+- clamps pad analog X/Y to +/-60;
+- accumulates movement with `tan(axis * (M_PI / 140))`;
+- keeps temporary floating-point mouse coordinates;
+- emits the accumulated position as `EVENT_MOUSEMOVE` on the bounded
+  `PAD_CHECK_TIME` cadence.
 
-The N64 target enables only:
+Its VI callback calls `readControllerAnalogInput()`:
 
-```makefile
-ENABLE_SCUMM := STATIC_PLUGIN
-ENABLE_SCUMM_7_8 := STATIC_PLUGIN
-```
+https://raw.githubusercontent.com/scummvm/scummvm/v1.6.0/backends/platform/n64/osys_n64_utilities.cpp
 
-AGI is not enabled.
+## Pinned libdragon input contract
 
-## Why r2f repeated the predictive-dialog error
+Pinned libdragon commit:
+`35f85a0797324a5ed0c723203e33ab3c1da94fdd`
 
-The r2e/r2f compiler reached `gui/predictivedialog.cpp` and modern GCC rejected a legacy conversion in that source.
+Header:
+https://raw.githubusercontent.com/DragonMinded/libdragon/35f85a0797324a5ed0c723203e33ab3c1da94fdd/include/joypad.h
 
-r2f attempted to remove `gui/predictivedialog.o` from top-level `OBJS` after including `Makefile.common`. That could not work.
+The Joypad subsystem starts reading controllers during VI interrupt.
+`joypad_poll()` synchronizes the asynchronously-read state and is intended to
+be called once per frame. `joypad_inputs_t` exposes signed `stick_x` and
+`stick_y`, with healthy OEM N64 controllers typically reaching roughly
++/-85.
 
-ScummVM 1.6.0 `Makefile.common` first includes every module's `module.mk`. `rules.mk` then transforms each static module's object list into a module archive and appends the archive to top-level `OBJS`:
+r2m therefore does not invent a new controller model: it combines libdragon's
+VI-backed state with the timing/curve behavior already used by ScummVM's
+historical N64 port.
 
-```text
-gui/*.o -> gui/libgui.a -> top-level OBJS
-```
+## Historical ScummVM N64 video behavior
 
-By the time the r2f filter ran, `gui/predictivedialog.o` had already become a prerequisite of `gui/libgui.a`. The r2f filter is removed entirely in r2i.
+Pinned reference:
+https://raw.githubusercontent.com/scummvm/scummvm/v1.6.0/backends/platform/n64/osys_n64_base.cpp
 
-## r2i source change
+The historical backend allocates both an 8-bit palettized offscreen buffer and
+a 16-bit high-color offscreen buffer. `copyRectToScreen()` updates converted
+pixels as the palettized pixels change. A palette change marks the converted
+buffer for rebuild. `updateScreen()` skips clean frames and copies the
+preconverted high-color image to the framebuffer in bulk.
 
-r2i always starts with the pristine pinned ScummVM tree and applies exactly one normal Git patch:
+r2l instead performed the palette lookup for every displayed game pixel inside
+every dirty `updateScreen()`. r2m moves back to the historical two-buffer
+shape, while using libdragon surfaces and display buffers.
 
-```text
-upstream/scummvm-1.6.0-ft64.patch
-```
+## Later ScummVM evidence
 
-That patch removes `predictivedialog.o` from `gui/module.mk` before `Makefile.common` constructs the GUI archive rule. It does not edit `predictivedialog.cpp` and does not use `sed`, regex replacement, or a chain of generated patchers.
+ScummVM 2.7.0 release notes say the project later fixed minor SMUSH timing
+issues, mostly affecting Full Throttle, and added a low-latency audio mode for
+Full Throttle/The Dig/COMI:
 
-`git apply --check` must pass before the source is changed.
+https://docs.scummvm.org/en/v2.7.0/help/release.html
 
-## Dependency-graph proof
+Those later engine changes are noted as a possible next investigation if the
+backend presentation optimization is insufficient. They are deliberately NOT
+backported in r2m because their exact source changes have not yet been isolated
+and validated against the pinned 1.6.0 codebase.
 
-After integration and before compilation, r2i runs `make -pn` against the actual pinned ScummVM + libdragon Makefile and records the generated make database.
+## No game/demo packaging
 
-The build is stopped unless:
-
-* `gui/libgui.a` exists in that database and has no `gui/predictivedialog.o` prerequisite;
-* `engines/scumm/libscumm.a` contains `engines/scumm/insane/insane.o`;
-* it contains `engines/scumm/smush/smush_player.o`;
-* it contains `engines/scumm/imuse_digi/dimuse.o`.
-
-This is the guard that r2f was missing.
-
-
-## r2g final-link failure and r2i correction
-
-r2g reached the final ELF link, proving the Full Throttle-only ScummVM source set compiled. The linker failed with `linker script file 'n64.ld' appears multiple times`.
-
-Pinned libdragon `n64.mk` defines `N64_LDFLAGS` with `-Tn64.ld` and appends `N64_LDFLAGS` as a target-specific `LDFLAGS` value on `%.z64`. That target-specific value is inherited by the ELF prerequisite. r2g also initialized global `LDFLAGS` from `N64_LDFLAGS`, producing two copies. The same duplication affected C/C++/assembler platform flags.
-
-r2i therefore does not copy any `N64_*FLAGS` variable into generic flags. It normalizes libdragon's `N64_CFLAGS`/`N64_CXXFLAGS` once (removing `-Werror` and selecting C++11), then lets libdragon propagate them. The generic `CXXFLAGS` contains only the ScummVM-specific `-fno-rtti -fno-exceptions` delta.
-
-Before compilation, integration now performs a GNU make dry run of `full-throttle-n64-r2i.z64`, captures the exact final G++ link command, and requires exactly one `-Tn64.ld`.
-
-## Prior compiler-proven corrections retained
-
-Earlier CI runs established:
-
-* libdragon ROM metadata uses `N64_ROM_CONTROLLER1=n64`, not `joypad`;
-* ScummVM 1.6.0 `Graphics::Surface` uses the public `pixels` member rather than `getPixels()`;
-* SCUMM sources expect the `engines/` include root so `scumm/scumm.h` resolves;
-* the pinned libdragon toolchain does not provide POSIX `<dirent.h>`, so the backend uses libdragon's native directory API;
-* the mounted FAT adapter does not provide runtime directory creation, so `saves/` is staged in the SD payload.
-
-Each retained correction has a preflight regression guard.
-
-## Filesystem architecture
-
-The backend supplies `N64LibdragonFilesystemNode` rather than ScummVM's POSIX filesystem implementation. Directory enumeration uses:
-
-```text
-dir_t
-dir_findfirst()
-dir_findnext()
-```
-
-File streams use ScummVM `StdioStream` over libdragon/Newlib after `sd:/` is mounted.
-
-## Historical N64 backend
-
-The old ScummVM N64 backend remains useful reference material but is not linked into this target. r2i does not use hkz-libn64, ROMFS, PakFS or FRAMFS.
-
-## r2i: linker-audit false negative
-
-The r2h CI integration step failed before compilation because its audit captured only
-the first physical line of libdragon's final g++ recipe. In pinned libdragon n64.mk,
-the g++ invocation is continued onto the following line, where `$(LDFLAGS)` expands;
-therefore `-Tn64.ld` was not present in the single captured line even though it is
-present in the actual executable link branch. r2i audits the complete first g++
-branch through its `-Wl,-Map=...;` terminator. The backend flag-ownership change from
-r2h is unchanged.
-
-
-## r2l: final ROM packaging title
-
-The r2i ScummVM build compiled and linked through `full-throttle-n64-r2i.elf`, then failed when libdragon invoked `n64tool`. The generated command expanded the backend title as separate shell words before `--output`, causing `n64tool` to treat those words as input files and report `Need output flag before first file`.
-
-Pinned libdragon defines `N64_TOOLFLAGS = --title $(N64_ROM_TITLE)` and its own default `N64_ROM_TITLE` includes quotes. r2l follows that contract directly:
-
-```makefile
-N64_ROM_TITLE := "Full Throttle N64"
-```
-
-The title is 17 characters, within `n64tool`'s 20-character title limit. Integration dry-runs the actual final `.z64` target and refuses to compile unless the emitted `n64tool` command contains the quoted title immediately before `--toc --output full-throttle-n64-r2l.z64`.
-
-## r2l validation policy
-
-Generated compiler/linker/package command text is not parsed as a pre-build gate.
-The integration step validates the pinned-source module graph, including removal
-of the unused predictive dialog and presence of Full Throttle's SCUMM v7/v8
-objects. The actual `V=1` N64 build is authoritative for toolchain flags,
-linking, and ROM packaging; its complete log and output-ROM existence are
-preserved and checked by CI.
+r2m does not fetch, stage, archive, or upload Full Throttle data. Hardware uses
+the user's existing `sd:/fullthrottle/` directory. This removes the now
+unnecessary large data transfer from CI without changing the runtime data path.

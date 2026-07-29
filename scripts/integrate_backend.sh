@@ -98,5 +98,5 @@ done
 # Capture the complete clean delta against the pinned source.
 git -C "$SCUMMVM" add -N backends/platform/n64libdragon
 git -C "$SCUMMVM" diff --check
-git -C "$SCUMMVM" diff > "$ART/r2l-source-delta.patch"
+git -C "$SCUMMVM" diff > "$ART/r2m-source-delta.patch"
 git -C "$SCUMMVM" status --short > "$ART/scummvm-status-after-integration.txt"

@@ -85,6 +85,7 @@ private:
 
     Audio::MixerImpl *_mixer;
     Graphics::Surface _game;
+    uint16 *_game16;
     uint16 *_overlay;
     uint16 _palette[256];
     byte _exactPalette[256 * 3];
@@ -97,17 +98,28 @@ private:
 
     int _gameW, _gameH;
     int _mouseX, _mouseY;
+    float _mouseAccumX, _mouseAccumY;
     int _shake;
     bool _overlayVisible;
     bool _mouseVisible;
     int _graphicsMode;
 
     uint32 _timerNext;
+    uint32 _joypadLastPoll;
+    uint32 _mouseLastEvent;
+    joypad_inputs_t _joypadInput;
+    joypad_buttons_t _lastButtons;
+    bool _joypadStateValid;
+    bool _game16Dirty;
+    bool _screenDirty;
 
     void serviceAudio();
     void serviceTimer();
+    void sampleAnalogMouse(const joypad_inputs_t &in);
+    void rebuildGame16();
+    int mouseMaxX() const;
+    int mouseMaxY() const;
     void clampMouse();
-    uint16 palettePixel(byte idx) const;
     uint16 overlayPixel(uint16 src) const;
     void drawCursor(surface_t *dst, int xoff, int yoff);
 };
