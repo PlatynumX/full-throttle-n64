@@ -8,7 +8,7 @@ for f in scripts/*.sh; do
   bash -n "$f"
 done
 
-echo "[preflight] required r2 backend gates"
+echo "[preflight] required r2a backend gates"
 grep -q 'ENABLE_SCUMM_7_8 := $(ENABLED)' backend/Makefile.libdragon
 grep -q 'N64_LIBDRAGON' backend/Makefile.libdragon
 grep -q '^MKDIR := mkdir -p' backend/Makefile.libdragon
@@ -27,7 +27,7 @@ grep -q 'get_memory_size()' probe/sd_probe.c
 
 echo "[preflight] no known legacy/freeze traps"
 if grep -R -nE 'hkz-libn64|libn64\.h|pakfs|framfs|initRomFSmanager|NONSTANDARD_PORT' backend probe; then
-  echo "legacy N64 dependency leaked into r2 backend" >&2
+  echo "legacy N64 dependency leaked into r2a backend" >&2
   exit 1
 fi
 if grep -n 'for *(;;)' backend/osys_n64_libdragon.cpp; then
@@ -39,9 +39,19 @@ if grep -R -n '_timerCallback\|setTimerCallback' backend; then
   exit 1
 fi
 
+echo "[preflight] CI does not depend on executable script bits"
+if grep -nE 'run: \./scripts/|^[[:space:]]+\./scripts/' .github/workflows/build-full-throttle-r2a.yml; then
+  echo "workflow invokes repository scripts directly; use bash ./scripts/... for Android-safe Git modes" >&2
+  exit 1
+fi
+if grep -nE '^\./scripts/' scripts/run_all.sh; then
+  echo "run_all.sh invokes repository scripts directly; use bash ./scripts/..." >&2
+  exit 1
+fi
+
 echo "[preflight] demo and toolchain URLs"
 grep -q 'downloads.scummvm.org/frs/demos/scumm/ft-dos-demo-en.zip' scripts/fetch_demo.sh
-grep -q 'toolchain-continuous-prerelease/gcc-toolchain-mips64-x86_64.deb' .github/workflows/build-full-throttle-r2.yml
+grep -q 'toolchain-continuous-prerelease/gcc-toolchain-mips64-x86_64.deb' .github/workflows/build-full-throttle-r2a.yml
 grep -q '35f85a0797324a5ed0c723203e33ab3c1da94fdd' scripts/fetch_libdragon.sh
 
 echo "[preflight] OK"

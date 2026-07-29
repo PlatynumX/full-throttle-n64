@@ -41,4 +41,4 @@ grep -q 'ENABLE_SCUMM_7_8' "$SCUMMVM/engines/engines.mk"
 grep -q 'ENABLE_SCUMM_7_8 := $(ENABLED)' "$DST/Makefile"
 
 git -C "$SCUMMVM" diff --check
-git -C "$SCUMMVM" diff > "$ROOT/artifacts/r2-backend.patch"
+git -C "$SCUMMVM" diff > "$ROOT/artifacts/r2a-backend.patch"

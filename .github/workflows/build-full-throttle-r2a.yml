@@ -1,10 +1,10 @@
-name: Build Full Throttle N64 r2
+name: Build Full Throttle N64 r2a
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - ".github/workflows/build-full-throttle-r2.yml"
+      - ".github/workflows/build-full-throttle-r2a.yml"
       - "backend/**"
       - "probe/**"
       - "scripts/**"
@@ -31,18 +31,18 @@ jobs:
             libmpc-dev libmpfr-dev make python3 texinfo unzip wget zlib1g-dev
 
       - name: Preflight
-        run: ./scripts/preflight.sh
+        run: bash ./scripts/preflight.sh
 
       - name: Fetch pinned ScummVM and stable libdragon
         run: |
           mkdir -p artifacts
-          ./scripts/fetch_source.sh | tee artifacts/scummvm-source.txt
-          ./scripts/fetch_libdragon.sh | tee artifacts/libdragon-source.txt
+          bash ./scripts/fetch_source.sh | tee artifacts/scummvm-source.txt
+          bash ./scripts/fetch_libdragon.sh | tee artifacts/libdragon-source.txt
 
       - name: Fetch and stage official Full Throttle demo
         run: |
-          ./scripts/fetch_demo.sh
-          ./scripts/stage_demo_sd.sh
+          bash ./scripts/fetch_demo.sh
+          bash ./scripts/stage_demo_sd.sh
 
       - name: Install current prebuilt libdragon toolchain
         run: |
@@ -55,18 +55,18 @@ jobs:
           echo "N64_INST=$N64_INST" >> "$GITHUB_ENV"
           echo "$N64_INST/bin" >> "$GITHUB_PATH"
           mips64-elf-gcc --version | head -1 | tee artifacts/toolchain-version.txt
-          ./scripts/build_libdragon.sh
+          bash ./scripts/build_libdragon.sh
 
-      - name: Integrate r2 backend
-        run: ./scripts/integrate_backend.sh
+      - name: Integrate r2a backend
+        run: bash ./scripts/integrate_backend.sh
 
       - name: Build standalone SummerCart SD probe
-        run: ./scripts/build_probe.sh
+        run: bash ./scripts/build_probe.sh
 
       - name: Build ScummVM Full Throttle integration
         id: scummvm
         continue-on-error: true
-        run: ./scripts/build_scummvm.sh
+        run: bash ./scripts/build_scummvm.sh
 
       - name: Record final diagnostics
         if: always()
@@ -77,7 +77,7 @@ jobs:
             echo
             echo "Artifact files:"
             find artifacts -type f -printf '%P %s bytes\n' | sort
-          } > artifacts/r2-summary.txt
+          } > artifacts/r2a-summary.txt
 
           if [ -d work/scummvm/.git ]; then
             git -C work/scummvm diff --check \
@@ -91,11 +91,11 @@ jobs:
               > artifacts/libdragon-commit.txt || true
           fi
 
-      - name: Upload r2 ROMs, demo payload, and diagnostics
+      - name: Upload r2a ROMs, demo payload, and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: full-throttle-n64-r2-build-report
+          name: full-throttle-n64-r2a-build-report
           path: artifacts/
           if-no-files-found: error
           retention-days: 30

@@ -40,13 +40,13 @@ int main(void) {
     bool rw_ok = false;
     if (sd_ok) {
         mkdir("sd:/fullthrottle", 0777);
-        FILE *f = fopen("sd:/fullthrottle/ft64-r2-probe.txt", "wb");
+        FILE *f = fopen("sd:/fullthrottle/ft64-r2a-probe.txt", "wb");
         if (f) {
-            static const char payload[] = "Full Throttle N64 r2 SD probe OK\n";
+            static const char payload[] = "Full Throttle N64 r2a SD probe OK\n";
             size_t wrote = fwrite(payload, 1, sizeof(payload) - 1, f);
             fclose(f);
 
-            f = fopen("sd:/fullthrottle/ft64-r2-probe.txt", "rb");
+            f = fopen("sd:/fullthrottle/ft64-r2a-probe.txt", "rb");
             if (f) {
                 char check[sizeof(payload)] = {0};
                 size_t got = fread(check, 1, sizeof(payload) - 1, f);
@@ -66,7 +66,7 @@ int main(void) {
     snprintf(line_pad, sizeof(line_pad), "Controller 1: %s",
              joypad_is_connected(JOYPAD_PORT_1) ? "CONNECTED" : "NOT FOUND");
 
-    lines[0] = "FULL THROTTLE N64 - r2";
+    lines[0] = "FULL THROTTLE N64 - r2a";
     lines[1] = "libdragon / SummerCart probe";
     lines[2] = "";
     lines[3] = line_mem;
@@ -84,7 +84,7 @@ int main(void) {
     lines[15] = "";
     draw_lines(lines, 16);
 
-    debugf("FT64 r2 probe: expanded=%d mem=%lu sd=%d dir=%d rw=%d audio=%dHz\n",
+    debugf("FT64 r2a probe: expanded=%d mem=%lu sd=%d dir=%d rw=%d audio=%dHz\n",
            is_memory_expanded(), (unsigned long)get_memory_size(),
            sd_ok, dir_ok, rw_ok, audio_get_frequency());
 
@@ -93,13 +93,13 @@ int main(void) {
         joypad_buttons_t pressed = joypad_get_buttons_pressed(JOYPAD_PORT_1);
 
         if (pressed.a) {
-            FILE *f = fopen("sd:/fullthrottle/ft64-r2-probe.txt", "ab");
+            FILE *f = fopen("sd:/fullthrottle/ft64-r2a-probe.txt", "ab");
             if (f) {
                 fputs("A button re-test OK\n", f);
                 fclose(f);
-                debugf("FT64 r2: A-button SD append OK\n");
+                debugf("FT64 r2a: A-button SD append OK\n");
             } else {
-                debugf("FT64 r2: A-button SD append FAILED errno=%d\n", errno);
+                debugf("FT64 r2a: A-button SD append FAILED errno=%d\n", errno);
             }
         }
 

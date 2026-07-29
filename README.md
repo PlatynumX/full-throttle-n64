@@ -1,6 +1,6 @@
-# Full Throttle N64 r2 — libdragon backend bring-up
+# Full Throttle N64 r2a — libdragon backend bring-up
 
-r2 supersedes the legacy `hkz-libn64` experiment from r1.
+r2a supersedes the legacy `hkz-libn64` experiment from r1.
 
 The target is deliberately narrow:
 
@@ -11,7 +11,7 @@ This repository does **not** contain the retail game. The CI workflow fetches
 ScummVM's publicly distributed DOS Full Throttle demo as the reproducible test
 payload and stages it as an SD-card artifact.
 
-## What r2 changes
+## What r2a changes
 
 * Keeps **ScummVM 1.6.0** as the initial engine baseline because it already has
   Full Throttle / SCUMM v7 support.
@@ -25,11 +25,11 @@ payload and stages it as an SD-card artifact.
 
 ## Build outputs
 
-The GitHub Action uploads one `full-throttle-n64-r2-build-report` artifact
+The GitHub Action uploads one `full-throttle-n64-r2a-build-report` artifact
 containing:
 
 * `ft64-sd-probe.z64` — libdragon/SummerCart hardware probe.
-* `full-throttle-n64-r2.z64` — ScummVM/SCUMM v7 integration ROM if the backend
+* `full-throttle-n64-r2a.z64` — ScummVM/SCUMM v7 integration ROM if the backend
   compiles and links.
 * `sdcard/fullthrottle/` — extracted official demo payload to copy to SD.
 * source/patch/build logs and version pins.
@@ -55,7 +55,7 @@ The ScummVM executable is launched with:
 -p sd:/fullthrottle ft
 ```
 
-## Controller mapping for r2
+## Controller mapping for r2a
 
 * Analog stick — mouse pointer
 * Z — left mouse button
@@ -68,7 +68,7 @@ Input can be refined after the game reaches hardware.
 
 ## Safety
 
-r2 does **not** use the historical N64 Controller Pak / FlashRAM save managers.
+r2a does **not** use the historical N64 Controller Pak / FlashRAM save managers.
 Save files are routed to the SD card.
 
 ## Local preflight

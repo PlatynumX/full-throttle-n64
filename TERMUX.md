@@ -1,42 +1,34 @@
 # Termux upload/build commands
 
-After downloading `full-throttle-n64-r2.zip`:
+After downloading `full-throttle-n64-r2a.zip`, extract it directly into Termux home so Android shared-storage permissions cannot interfere:
 
 ```bash
-cd ~/storage/downloads
-unzip -o full-throttle-n64-r2.zip
-cd full-throttle-n64-r2
-chmod +x scripts/*.sh
-./scripts/preflight.sh
+cd ~
+rm -rf full-throttle-n64-r2a
+unzip -o ~/storage/downloads/full-throttle-n64-r2a.zip -d ~
+cd ~/full-throttle-n64-r2a
+bash ./scripts/preflight.sh
 ```
 
-To create a GitHub repository and push it with GitHub CLI:
+## Update the GitHub repository you already created for r2
+
+Reuse its Git metadata instead of creating a second repository:
 
 ```bash
-pkg install -y git gh
-git init
-git add .
-git commit -m "Full Throttle N64 r2 libdragon backend"
-gh auth status || gh auth login
-gh repo create full-throttle-n64 --public --source=. --remote=origin --push
+cd ~
+rm -rf ~/full-throttle-n64-r2a/.git
+cp -a ~/full-throttle-n64-r2/.git ~/full-throttle-n64-r2a/.git
+cd ~/full-throttle-n64-r2a
+git status
+git add -A
+git commit -m "Full Throttle N64 r2a Android-safe CI invocation"
+git push
 ```
 
-If the repository already exists:
-
-```bash
-git init
-git branch -M main
-git add .
-git commit -m "Full Throttle N64 r2 libdragon backend"
-git remote remove origin 2>/dev/null || true
-git remote add origin https://github.com/YOURNAME/full-throttle-n64.git
-git push -u origin main
-```
-
-Then open **Actions → Build Full Throttle N64 r2 → Run workflow**.
+The push triggers **Build Full Throttle N64 r2a** automatically. You can also run it manually from GitHub Actions.
 
 The artifact is named:
 
 ```text
-full-throttle-n64-r2-build-report
+full-throttle-n64-r2a-build-report
 ```
