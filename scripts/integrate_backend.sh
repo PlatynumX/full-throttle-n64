@@ -35,9 +35,9 @@ done
 
 # Focused source neighborhoods make a failed CI run useful instead of opaque.
 sed -n '1,45p' "$SCUMMVM/gui/module.mk" > "$ART/gui-module-before.txt"
-sed -n '190,235p;840,885p' "$SCUMMVM/engines/scumm/smush/smush_player.cpp" > "$ART/smush-player-before.txt"
+sed -n '205,250p;895,955p' "$SCUMMVM/engines/scumm/smush/smush_player.cpp" > "$ART/smush-player-before.txt"
 sed -n '30,115p' "$SCUMMVM/engines/scumm/smush/smush_player.h" > "$ART/smush-header-before.txt"
-sed -n '815,835p;1330,1398p' "$SCUMMVM/engines/scumm/insane/insane.cpp" > "$ART/insane-before.txt"
+sed -n '850,880p;1398,1465p' "$SCUMMVM/engines/scumm/insane/insane.cpp" > "$ART/insane-before.txt"
 
 if [ "$(grep -c '^[[:space:]]*predictivedialog\.o[[:space:]]*\\' "$SCUMMVM/gui/module.mk")" -ne 1 ]; then
     echo "expected exactly one predictivedialog.o entry in pristine gui/module.mk" >&2
@@ -47,11 +47,11 @@ grep -Fq 'int16 _smush_setupsan2;' "$SCUMMVM/engines/scumm/insane/insane.h"
 grep -Fq '/* _version = */ b.readUint16LE();' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
 grep -Fq 'bool _skipPalette;' "$SCUMMVM/engines/scumm/smush/smush_player.h"
 
-# r2o is a minimal, direct backport to the verified 1.6.0 layout. There is no
+# r2q is a minimal, direct backport to the verified 1.6.0 layout. There is no
 # second patch, regex rewrite, sed mutation, or fuzzy fallback.
-echo "[integrate] checking consolidated r2o source patch against pinned ScummVM"
+echo "[integrate] checking consolidated r2q source patch against pinned ScummVM"
 git -C "$SCUMMVM" apply --check "$PATCH"
-echo "[integrate] applying consolidated r2o source patch once"
+echo "[integrate] applying consolidated r2q source patch once"
 git -C "$SCUMMVM" apply "$PATCH"
 
 # Verify source-level results, not merely a zero exit code.
@@ -71,7 +71,7 @@ grep -Fq 'b.skip(0x300);' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
 grep -Fq 'int16 _smush_setupsan2;' "$SCUMMVM/engines/scumm/insane/insane.h"
 # The N64 adaptation deliberately does not allocate the whole AHDR chunk.
 if grep -Fq 'byte *headerContent = (byte *)malloc(subSize' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"; then
-    echo "unexpected whole-AHDR allocation in r2o SMUSH backport" >&2
+    echo "unexpected whole-AHDR allocation in r2q SMUSH backport" >&2
     exit 1
 fi
 
@@ -83,9 +83,9 @@ for rel in \
     mkdir -p "$ART/patched-source/$(dirname "$rel")"
     cp "$SCUMMVM/$rel" "$ART/patched-source/$rel"
 done
-sed -n '190,240p;840,900p' "$SCUMMVM/engines/scumm/smush/smush_player.cpp" > "$ART/smush-player-after.txt"
+sed -n '205,255p;895,970p' "$SCUMMVM/engines/scumm/smush/smush_player.cpp" > "$ART/smush-player-after.txt"
 sed -n '30,120p' "$SCUMMVM/engines/scumm/smush/smush_player.h" > "$ART/smush-header-after.txt"
-sed -n '815,840p;1330,1398p' "$SCUMMVM/engines/scumm/insane/insane.cpp" > "$ART/insane-after.txt"
+sed -n '850,885p;1398,1470p' "$SCUMMVM/engines/scumm/insane/insane.cpp" > "$ART/insane-after.txt"
 
 # Install the hardware-proven libdragon backend as complete source files.
 rm -rf "$DST"
@@ -140,5 +140,5 @@ done
 
 git -C "$SCUMMVM" add -N backends/platform/n64libdragon
 git -C "$SCUMMVM" diff --check
-git -C "$SCUMMVM" diff > "$ART/r2o-source-delta.patch"
+git -C "$SCUMMVM" diff > "$ART/r2q-source-delta.patch"
 git -C "$SCUMMVM" status --short > "$ART/scummvm-status-after-integration.txt"

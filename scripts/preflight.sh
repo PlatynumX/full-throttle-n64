@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-WORKFLOW=".github/workflows/build-full-throttle-r2o.yml"
+WORKFLOW=".github/workflows/build-full-throttle-r2q.yml"
 PATCH="upstream/scummvm-1.6.0-ft64.patch"
 
 echo "[preflight] shell syntax"
@@ -37,20 +37,21 @@ if [ "${#conflict_files[@]}" -ne 0 ]; then
     exit 1
 fi
 
-echo "[preflight] r2o identity and no stale r2p/r2n workflow"
+echo "[preflight] r2q identity and no stale r2o/r2p/r2n workflow"
+test ! -e .github/workflows/build-full-throttle-r2o.yml
 test ! -e .github/workflows/build-full-throttle-r2p.yml
 test ! -e .github/workflows/build-full-throttle-r2n.yml
-grep -Fqx 'name: Build Full Throttle N64 r2o' "$WORKFLOW"
-grep -Fq 'name: full-throttle-n64-r2o-build-report' "$WORKFLOW"
-grep -Fq 'TARGET := full-throttle-n64-r2o' backend/Makefile.libdragon
-grep -Fq 'full-throttle-n64-r2o.z64' scripts/build_scummvm.sh
-grep -Fq 'ft64-sd-probe-r2o.z64' scripts/build_probe.sh
-grep -Fq 'FULL THROTTLE N64 - r2o' probe/sd_probe.c
+grep -Fqx 'name: Build Full Throttle N64 r2q' "$WORKFLOW"
+grep -Fq 'name: full-throttle-n64-r2q-build-report' "$WORKFLOW"
+grep -Fq 'TARGET := full-throttle-n64-r2q' backend/Makefile.libdragon
+grep -Fq 'full-throttle-n64-r2q.z64' scripts/build_scummvm.sh
+grep -Fq 'ft64-sd-probe-r2q.z64' scripts/build_probe.sh
+grep -Fq 'FULL THROTTLE N64 - r2q' probe/sd_probe.c
 # Historical documentation may legitimately mention earlier revisions. Reject only
-# active build/runtime identities that would make r2o publish or report as r2n/r2p.
-if grep -RInE --exclude=preflight.sh 'full-throttle-n64-r2(n|p)(\.z64|-build-report)|ft64-sd-probe-r2(n|p)|Build Full Throttle N64 r2(n|p)|FULL THROTTLE N64 - r2(n|p)' \
+# active build/runtime identities that would make r2q publish or report as an older release.
+if grep -RInE --exclude=preflight.sh 'full-throttle-n64-r2(n|o|p)(\.z64|-build-report)|ft64-sd-probe-r2(n|o|p)|Build Full Throttle N64 r2(n|o|p)|FULL THROTTLE N64 - r2(n|o|p)' \
     .github scripts backend/Makefile.libdragon probe TERMUX.md; then
-    echo "stale active r2n/r2p project identity remains" >&2
+    echo "stale active r2n/r2o/r2p project identity remains" >&2
     exit 1
 fi
 
@@ -60,7 +61,7 @@ test ! -e scripts/fetch_demo.sh
 test ! -e scripts/stage_demo_sd.sh
 if grep -RInE 'ft-dos-demo|fetch_demo|stage_demo|demo-cache|artifacts/sdcard' \
     .github scripts/run_all.sh scripts/publish_termux.sh TERMUX.md .gitignore; then
-    echo "game/demo packaging machinery leaked into r2o" >&2
+    echo "game/demo packaging machinery leaked into r2q" >&2
     exit 1
 fi
 
@@ -84,13 +85,24 @@ if [ "${patch_paths[*]}" != "${expected_paths[*]}" ]; then
     printf 'expected: %s\n' "${expected_paths[*]}" >&2
     exit 1
 fi
+expected_patch_sha='38ddda23037b45da9c7842245c6442eea8096a029b7141382a43d341a366ca54'
+actual_patch_sha="$(sha256sum "$PATCH" | awk '{print $1}')"
+if [ "$actual_patch_sha" != "$expected_patch_sha" ]; then
+    echo "consolidated patch digest does not match validated r2q patch" >&2
+    echo "actual:   $actual_patch_sha" >&2
+    echo "expected: $expected_patch_sha" >&2
+    exit 1
+fi
+grep -Fq $'\t_smush_setupsan2 = setupsan2;' "$PATCH"
+grep -Fq $'\t_player->setCurVideoFlags(_smush_setupsan2);' "$PATCH"
+grep -Fq 'const byte headerMajorVersion = b.readByte();' "$PATCH"
 grep -Fq 'video speed override' "$PATCH"
 grep -Fq 'setCurVideoFlags' "$PATCH"
 grep -Fq '_smush_setupsan2' "$PATCH"
 grep -Fq 'subSize >= 0x308' "$PATCH"
 grep -Fq 'predictivedialog.o' "$PATCH"
 if grep -Fq 'engines/scumm/insane/insane.h' "$PATCH" || grep -Fq 'engines/scumm/scumm.cpp' "$PATCH"; then
-    echo "r2o patch imported unnecessary later-source files" >&2
+    echo "r2q patch imported unnecessary later-source files" >&2
     exit 1
 fi
 

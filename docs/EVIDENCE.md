@@ -1,13 +1,6 @@
-# Evidence / design notes — r2o
+# Evidence / design notes — r2q
 
-## Hardware baseline
-
-r2m runs on real Nintendo 64 hardware with an Expansion Pak and SummerCart.
-Full Throttle loads from `sd:/fullthrottle/`, plays the opening SMUSH video, and
-reaches gameplay. r2o retains that controller, filesystem, audio/timer, and
-preconverted-framebuffer path.
-
-## Exact pinned source
+## Exact source evidence
 
 ScummVM is pinned to:
 
@@ -21,50 +14,41 @@ libdragon is pinned to:
 35f85a0797324a5ed0c723203e33ab3c1da94fdd
 ```
 
-Inspection of the pinned ScummVM source establishes the actual 1.6.0 layout:
+The uploaded r2o CI report preserved the exact pristine ScummVM files touched by
+the source patch. They establish the real 1.6.0 layout:
 
-- `engines/scumm/smush/smush_player.h` is 132 lines;
-- `_speed` and `_skipPalette` are private fields in the compact 1.6.0 class;
-- `handleAnimHeader()` reads a 6-byte prefix followed by the 0x300-byte palette;
-- `Insane` stores the SAN flags in `_smush_setupsan2` at rewind, FLU setup, and
-  from-start setup sites;
-- `ScummEngine_v7::setupScumm()` already gives Full Throttle a 10 fps default.
+- `SmushPlayer::handleAnimHeader()` starts at line 906;
+- `Insane::smush_setupSanWithFlu()` starts at line 1402;
+- `Insane::smush_setupSanFromStart()` starts at line 1444;
+- `_smush_setupsan2` is the existing SAN-flags field;
+- AHDR has a six-byte prefix followed by the 0x300-byte palette.
 
-Those facts are why r2o does not import later `insane.h` renames or the unrelated
-DIG-demo `scumm.cpp` change.
+## r2o failure evidence
 
-## Upstream Full Throttle frame-rate evidence
+The integration log failed at exact `git apply --check` before either N64 build
+ran. Replaying the failed r2o patch with `git apply --check --verbose` against
+the preserved pristine files shows three context mismatches caused by omitted
+blank lines. The first INSANE hunk and constructor hunk relocate successfully,
+which also confirms the pinned checkout is the intended source generation.
 
-Upstream ScummVM commit:
+r2q does not patch the patch or add a fallback. Its one Git patch was generated
+directly from those pristine files.
 
-```text
-9e7e6a08b276ebe5dfdbc79e9a9fc2edcfd12bf8
-SCUMM: INSANE/SMUSH: Implement video file dependent frame rate
-```
+## Upstream timing behavior
 
-states that Full Throttle video files contain their correct frame rate in the
-FLU/AHDR data. Its implementation reads the speed at `6 + 0x300`, uses it for
-header versions greater than 1, and suppresses the override when SAN flag bit 3
-is set.
+Upstream ScummVM commit
+`9e7e6a08b276ebe5dfdbc79e9a9fc2edcfd12bf8` implements video-dependent frame
+rates for Full Throttle and the DIG demo. r2q carries only the Full Throttle
+behavior needed by this build and adapts it to the verified 1.6.0 layout.
 
-r2o preserves that behavior but adapts it to the pinned 1.6.0 source instead of
-copying 2023 hunk contexts. To reduce transient RAM use on N64, r2o reads the
-needed fields directly from the existing seekable stream rather than allocating
-a buffer for the entire AHDR chunk.
+The encoded rate is read after the six-byte AHDR prefix and 0x300-byte palette
+for header major versions greater than 1. SAN flag bit 3 suppresses the
+override. The N64 adaptation reads directly from the existing stream rather than
+allocating a complete AHDR copy.
 
-Upstream commit record:
-https://github.com/scummvm/scummvm/commit/9e7e6a08b276ebe5dfdbc79e9a9fc2edcfd12bf8
+## Patch policy
 
-## Overlay evidence
-
-The retained backend implements ScummVM's fake-alpha overlay contract by copying
-the current converted game frame into the overlay in `clearOverlay()` and by
-presenting immediately in `hideOverlay()`. r2o deliberately does not touch that
-backend logic while correcting the ScummVM source patch.
-
-## Backport verification policy
-
-The r2o project has exactly one ScummVM patch, touching only:
+Exactly one ScummVM patch touches:
 
 ```text
 engines/scumm/insane/insane.cpp
@@ -73,21 +57,15 @@ engines/scumm/smush/smush_player.h
 gui/module.mk
 ```
 
-CI records pristine source neighborhoods and then runs exactly one check and one
-application:
+Validated patch SHA-256:
 
 ```text
-git apply --check upstream/scummvm-1.6.0-ft64.patch
-git apply upstream/scummvm-1.6.0-ft64.patch
+38ddda23037b45da9c7842245c6442eea8096a029b7141382a43d341a366ca54
 ```
 
-Afterward it verifies the expected symbols and all three SAN-flag synchronization
-sites, checks the generated Make database for the stripped GUI and required Full
-Throttle engine objects, and runs `git diff --check`.
+The update bundle proves this patch against the exact CI-preserved source fixture
+before publishing. CI independently proves it against a clean pinned checkout
+before compiling.
 
-There is no `--3way`, fuzzy patching, sed/regex mutation, or second source patch.
-
-## No game/demo packaging
-
-r2o does not fetch, stage, archive, or upload Full Throttle game/demo data.
-Hardware uses the existing `sd:/fullthrottle/` directory.
+No fuzzy application, `--3way`, regex rewrite, sed source mutation, or secondary
+patch is permitted.

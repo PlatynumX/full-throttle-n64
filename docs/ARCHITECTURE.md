@@ -1,4 +1,4 @@
-# r2o architecture
+# r2q architecture
 
 ## Runtime data path
 
@@ -42,11 +42,11 @@ the patch is applied once.
 
 ## Input
 
-r2o retains the r2m libdragon Joypad/mouse path unchanged.
+r2q retains the r2m libdragon Joypad/mouse path unchanged.
 
 ## Audio/timers
 
-r2o does not change the established audio configuration or timer servicing.
+r2q does not change the established audio configuration or timer servicing.
 Audio remains 22050 Hz with three libdragon buffers. The ScummVM timer manager is
 serviced from normal backend execution rather than interrupt context.
 

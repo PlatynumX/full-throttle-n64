@@ -1,22 +1,12 @@
-# Full Throttle N64 r2o — Termux
+# Full Throttle N64 r2q — Termux
 
-After downloading a full `full-throttle-n64-r2o.zip` project package:
+The r2q update bundle advances the current failed-r2o repository without a
+hard-coded live GitHub commit SHA.
 
-```bash
-cd ~
-rm -rf ~/full-throttle-n64-r2o
-unzip -o ~/storage/downloads/full-throttle-n64-r2o.zip -d ~
-cd ~/full-throttle-n64-r2o
-bash ./scripts/preflight.sh
-bash ./scripts/publish_termux.sh
-```
+It first validates the corrected patch against the exact pinned ScummVM files
+preserved by r2o CI. It then fresh-clones GitHub, proves the live tree is the
+known failed-r2o baseline, captures that exact commit, installs r2q, runs
+preflight, enforces the exact staged file set, and refuses to push if the remote
+moves.
 
-`scripts/publish_termux.sh` fresh-clones the GitHub repository, replaces the
-tracked project tree with the validated r2o tree, runs preflight again on the
-exact commit candidate, runs `git diff --cached --check`, refuses to silently
-rebase onto a moving remote, and pushes only when the remote base is unchanged.
-
-The push triggers `build-full-throttle-r2o.yml`.
-
-The repository does not fetch or package Full Throttle game/demo data. Keep the
-existing files on the SummerCart at `sd:/fullthrottle/`.
+No Full Throttle game/demo data is fetched or packaged.
