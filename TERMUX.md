@@ -1,33 +1,19 @@
-<<<<<<< HEAD
-# Full Throttle N64 r2b — Termux update
-=======
-# Full Throttle N64 r2c — Termux update
->>>>>>> 5fed4cf (Full Throttle N64 r2c CI compatibility fixes)
+# Full Throttle N64 r2d — Termux update
 
 Keep the project in Termux home, not Android shared storage.
 
 ```bash
 cd ~
-<<<<<<< HEAD
-rm -rf ~/full-throttle-n64-r2b
-unzip -o ~/storage/downloads/full-throttle-n64-r2b.zip -d ~
-cd ~/full-throttle-n64-r2b
-=======
-rm -rf ~/full-throttle-n64-r2c
-unzip -o ~/storage/downloads/full-throttle-n64-r2c.zip -d ~
-cd ~/full-throttle-n64-r2c
->>>>>>> 5fed4cf (Full Throttle N64 r2c CI compatibility fixes)
+rm -rf ~/full-throttle-n64-r2d
+unzip -o ~/storage/downloads/full-throttle-n64-r2d.zip -d ~
+cd ~/full-throttle-n64-r2d
 bash ./scripts/preflight.sh
 ```
 
 To update the existing GitHub repository without force-pushing:
 
 ```bash
-<<<<<<< HEAD
-cd ~/full-throttle-n64-r2b
-=======
-cd ~/full-throttle-n64-r2c
->>>>>>> 5fed4cf (Full Throttle N64 r2c CI compatibility fixes)
+cd ~/full-throttle-n64-r2d
 rm -rf .git
 git init
 git remote add origin https://github.com/PlatynumX/full-throttle-n64.git
@@ -35,11 +21,7 @@ git fetch origin master
 git checkout -b master origin/master
 
 git add -A
-<<<<<<< HEAD
-git commit -m "Full Throttle N64 r2b native libdragon filesystem"
-=======
-git commit -m "Full Throttle N64 r2c CI compatibility fixes"
->>>>>>> 5fed4cf (Full Throttle N64 r2c CI compatibility fixes)
+git commit -m "Full Throttle N64 r2d CI compatibility fixes"
 git push origin master
 ```
 
@@ -49,10 +31,19 @@ that branch name instead; do not force-push.
 Run manually if needed:
 
 ```bash
-<<<<<<< HEAD
-gh workflow run build-full-throttle-r2b.yml
-=======
-gh workflow run build-full-throttle-r2c.yml
->>>>>>> 5fed4cf (Full Throttle N64 r2c CI compatibility fixes)
+gh workflow run build-full-throttle-r2d.yml
 gh run watch
 ```
+
+## Recommended r2d publish path
+
+Keep this extracted r2d directory out of Git and publish it through a fresh clone:
+
+```bash
+cd ~/full-throttle-n64-r2d
+bash ./scripts/publish_termux.sh
+```
+
+The publisher validates the pristine source tree, clones the current GitHub repository,
+overlays r2d **without copying `.git`**, validates the exact tree again, runs
+`git diff --cached --check`, rebases on the current remote tip, and then pushes.

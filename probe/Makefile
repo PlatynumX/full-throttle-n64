@@ -2,15 +2,9 @@ BUILD_DIR=build
 SOURCE_DIR=.
 include $(N64_INST)/include/n64.mk
 
-<<<<<<< HEAD
-N64_ROM_TITLE="FT64 r2b SD Probe"
-N64_ROM_REGIONFREE=true
-N64_ROM_CONTROLLER1=joypad
-=======
-N64_ROM_TITLE="FT64 r2c SD Probe"
+N64_ROM_TITLE="FT64 r2d SD Probe"
 N64_ROM_REGIONFREE=true
 N64_ROM_CONTROLLER1=n64
->>>>>>> 5fed4cf (Full Throttle N64 r2c CI compatibility fixes)
 
 all: ft64-sd-probe.z64
 
