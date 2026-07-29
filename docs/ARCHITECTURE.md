@@ -1,4 +1,4 @@
-# r2e architecture
+# r2f architecture
 
 ## Engine side
 
@@ -56,7 +56,7 @@ The probe:
 * initializes a controller;
 * mounts `sd:/`;
 * reads `sd:/fullthrottle/`;
-* creates/writes/reads `sd:/fullthrottle/ft64-r2e-probe.txt`;
+* creates/writes/reads `sd:/fullthrottle/ft64-r2f-probe.txt`;
 * initializes the audio subsystem;
 * reports status on screen and through debug output.
 
