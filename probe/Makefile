@@ -2,7 +2,7 @@ BUILD_DIR=build
 SOURCE_DIR=.
 include $(N64_INST)/include/n64.mk
 
-N64_ROM_TITLE="FT64 r2k SD Probe"
+N64_ROM_TITLE="FT64 r2l SD Probe"
 N64_ROM_REGIONFREE=true
 N64_ROM_CONTROLLER1=n64
 

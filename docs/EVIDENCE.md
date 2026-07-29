@@ -1,4 +1,4 @@
-# Evidence / design notes — r2k
+# Evidence / design notes — r2l
 
 ## Pinned sources
 
@@ -118,14 +118,23 @@ branch through its `-Wl,-Map=...;` terminator. The backend flag-ownership change
 r2h is unchanged.
 
 
-## r2k: final ROM packaging title
+## r2l: final ROM packaging title
 
 The r2i ScummVM build compiled and linked through `full-throttle-n64-r2i.elf`, then failed when libdragon invoked `n64tool`. The generated command expanded the backend title as separate shell words before `--output`, causing `n64tool` to treat those words as input files and report `Need output flag before first file`.
 
-Pinned libdragon defines `N64_TOOLFLAGS = --title $(N64_ROM_TITLE)` and its own default `N64_ROM_TITLE` includes quotes. r2k follows that contract directly:
+Pinned libdragon defines `N64_TOOLFLAGS = --title $(N64_ROM_TITLE)` and its own default `N64_ROM_TITLE` includes quotes. r2l follows that contract directly:
 
 ```makefile
 N64_ROM_TITLE := "Full Throttle N64"
 ```
 
-The title is 17 characters, within `n64tool`'s 20-character title limit. Integration dry-runs the actual final `.z64` target and refuses to compile unless the emitted `n64tool` command contains the quoted title immediately before `--toc --output full-throttle-n64-r2k.z64`.
+The title is 17 characters, within `n64tool`'s 20-character title limit. Integration dry-runs the actual final `.z64` target and refuses to compile unless the emitted `n64tool` command contains the quoted title immediately before `--toc --output full-throttle-n64-r2l.z64`.
+
+## r2l validation policy
+
+Generated compiler/linker/package command text is not parsed as a pre-build gate.
+The integration step validates the pinned-source module graph, including removal
+of the unused predictive dialog and presence of Full Throttle's SCUMM v7/v8
+objects. The actual `V=1` N64 build is authoritative for toolchain flags,
+linking, and ROM packaging; its complete log and output-ROM existence are
+preserved and checked by CI.

@@ -12,9 +12,9 @@ make -C "$PORT" V=1 -j"$(nproc)" 2>&1 | tee "$ART/scummvm-build.log"
 rc=${PIPESTATUS[0]}
 set -e
 
-if [ "$rc" -eq 0 ] && [ -f "$PORT/full-throttle-n64-r2k.z64" ]; then
-  cp "$PORT/full-throttle-n64-r2k.z64" "$ART/full-throttle-n64-r2k.z64"
-  sha256sum "$ART/full-throttle-n64-r2k.z64" > "$ART/full-throttle-n64-r2k.sha256"
+if [ "$rc" -eq 0 ] && [ -f "$PORT/full-throttle-n64-r2l.z64" ]; then
+  cp "$PORT/full-throttle-n64-r2l.z64" "$ART/full-throttle-n64-r2l.z64"
+  sha256sum "$ART/full-throttle-n64-r2l.z64" > "$ART/full-throttle-n64-r2l.sha256"
   printf 'PASS\n' > "$ART/scummvm-build-status.txt"
 else
   fail_rc="$rc"

@@ -1,10 +1,10 @@
-name: Build Full Throttle N64 r2k
+name: Build Full Throttle N64 r2l
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - ".github/workflows/build-full-throttle-r2k.yml"
+      - ".github/workflows/build-full-throttle-r2l.yml"
       - "backend/**"
       - "probe/**"
       - "scripts/**"
@@ -60,7 +60,7 @@ jobs:
           sed -n '1p' artifacts/toolchain-version-full.txt | tee artifacts/toolchain-version.txt
           bash ./scripts/build_libdragon.sh
 
-      - name: Integrate r2k backend
+      - name: Integrate r2l backend
         run: bash ./scripts/integrate_backend.sh
 
       - name: Build standalone SummerCart SD probe
@@ -83,7 +83,7 @@ jobs:
             echo
             echo "Artifact files:"
             find artifacts -type f -printf '%P %s bytes\n' | sort
-          } > artifacts/r2k-summary.txt
+          } > artifacts/r2l-summary.txt
 
           if [ -d work/scummvm/.git ]; then
             git -C work/scummvm diff --check \
@@ -97,11 +97,11 @@ jobs:
               > artifacts/libdragon-commit.txt || true
           fi
 
-      - name: Upload r2k ROMs, demo payload, and diagnostics
+      - name: Upload r2l ROMs, demo payload, and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: full-throttle-n64-r2k-build-report
+          name: full-throttle-n64-r2l-build-report
           path: artifacts/
           if-no-files-found: error
           retention-days: 30
@@ -111,5 +111,5 @@ jobs:
         run: |
           echo "Probe outcome: ${{ steps.probe.outcome }}"
           echo "ScummVM outcome: ${{ steps.scummvm.outcome }}"
-          echo "Both logs were preserved in the r2k build-report artifact."
+          echo "Both logs were preserved in the r2l build-report artifact."
           exit 1

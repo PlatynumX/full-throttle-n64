@@ -1,4 +1,4 @@
-# r2k architecture
+# r2l architecture
 
 ## Engine
 
