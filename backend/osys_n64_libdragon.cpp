@@ -22,6 +22,14 @@ static inline uint16 rgba5551(byte r, byte g, byte b) {
     return (uint16)(((r >> 3) << 11) | ((g >> 3) << 6) | ((b >> 3) << 1) | 1);
 }
 
+static uint32 s_diagLastHeartbeat = 0;
+static uint32 s_diagUpdateCalls = 0;
+static uint32 s_diagPollCalls = 0;
+static uint32 s_diagPresentCalls = 0;
+static uint32 s_diagCopyCalls = 0;
+static uint32 s_diagFullBlits = 0;
+static uint32 s_diagPaletteCalls = 0;
+
 OSystem_N64Libdragon::OSystem_N64Libdragon()
     : _mixer(0), _game16(0), _overlay(0), _cursor(0), _cursorW(0), _cursorH(0),
       _cursorKey(0), _cursorHotX(0), _cursorHotY(0),
@@ -33,7 +41,7 @@ OSystem_N64Libdragon::OSystem_N64Libdragon()
 
     debug_init(DEBUG_FEATURE_LOG_USB | DEBUG_FEATURE_LOG_EMU);
     bool sd = debug_init_sdfs("sd:/", -1);
-    debugf("FT64 r2p: libdragon backend starting; sdfs=%d\n", sd ? 1 : 0);
+    debugf("[FT64DIAG r2r] BOOT backend starting; sdfs=%d\n", sd ? 1 : 0);
 
     display_init(RESOLUTION_320x240, DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE);
     joypad_init();
@@ -83,8 +91,8 @@ void OSystem_N64Libdragon::initBackend() {
 
     EventsBaseBackend::initBackend();
 
-    debugf("FT64 r2p: backend init complete; audio=%d Hz buffer=%d\n",
-           audio_get_frequency(), audio_get_buffer_length());
+    debugf("[FT64DIAG r2r] INIT complete audio=%dHz buffer=%d game=%dx%d\n",
+           audio_get_frequency(), audio_get_buffer_length(), _gameW, _gameH);
 }
 
 bool OSystem_N64Libdragon::hasFeature(Feature f) {
@@ -134,6 +142,8 @@ void OSystem_N64Libdragon::initSize(uint width, uint height, const Graphics::Pix
 
     _gameW = (int)width;
     _gameH = (int)height;
+    debugf("[FT64DIAG r2r] VIDEO initSize %dx%d ms=%u\n",
+           _gameW, _gameH, (unsigned)getMillis());
     _game.create(_gameW, _gameH, Graphics::PixelFormat::createFormatCLUT8());
     memset(_game.pixels, 0, _game.pitch * _game.h);
     _game16 = (uint16 *)calloc(_gameW * _gameH, sizeof(uint16));
@@ -150,6 +160,7 @@ int16 OSystem_N64Libdragon::getHeight() { return (int16)_gameH; }
 int16 OSystem_N64Libdragon::getWidth() { return (int16)_gameW; }
 
 void OSystem_N64Libdragon::setPalette(const byte *colors, uint start, uint num) {
+    ++s_diagPaletteCalls;
     if (start >= 256) return;
     num = std::min<uint>(num, 256 - start);
     memcpy(_exactPalette + start * 3, colors, num * 3);
@@ -174,12 +185,15 @@ void OSystem_N64Libdragon::grabPalette(byte *colors, uint start, uint num) {
 
 void OSystem_N64Libdragon::copyRectToScreen(const void *buf, int pitch,
                                              int x, int y, int w, int h) {
+    ++s_diagCopyCalls;
     const byte *src = (const byte *)buf;
     if (x < 0) { src -= x; w += x; x = 0; }
     if (y < 0) { src -= y * pitch; h += y; y = 0; }
     if (x + w > _gameW) w = _gameW - x;
     if (y + h > _gameH) h = _gameH - y;
     if (w <= 0 || h <= 0) return;
+    if (x == 0 && y == 0 && w == _gameW && h == _gameH)
+        ++s_diagFullBlits;
 
     bool changed = false;
     for (int row = 0; row < h; ++row) {
@@ -277,8 +291,20 @@ void OSystem_N64Libdragon::serviceTimer() {
 }
 
 void OSystem_N64Libdragon::updateScreen() {
+    ++s_diagUpdateCalls;
     serviceAudio();
     serviceTimer();
+
+    const uint32 diagNow = getMillis();
+    if (!s_diagLastHeartbeat || (uint32)(diagNow - s_diagLastHeartbeat) >= 1000) {
+        debugf("[FT64DIAG r2r] HB ms=%u game=%dx%d ovl=%d dirty=%d g16dirty=%d upd=%u poll=%u present=%u copy=%u full=%u pal=%u\n",
+               (unsigned)diagNow, _gameW, _gameH, _overlayVisible ? 1 : 0,
+               _screenDirty ? 1 : 0, _game16Dirty ? 1 : 0,
+               (unsigned)s_diagUpdateCalls, (unsigned)s_diagPollCalls,
+               (unsigned)s_diagPresentCalls, (unsigned)s_diagCopyCalls,
+               (unsigned)s_diagFullBlits, (unsigned)s_diagPaletteCalls);
+        s_diagLastHeartbeat = diagNow;
+    }
 
     if (!_screenDirty)
         return;
@@ -327,6 +353,7 @@ void OSystem_N64Libdragon::updateScreen() {
     }
 
     display_show(dst);
+    ++s_diagPresentCalls;
     _screenDirty = false;
 }
 
@@ -347,7 +374,8 @@ void OSystem_N64Libdragon::setShakePos(int shakeOffset) {
 }
 
 void OSystem_N64Libdragon::showOverlay() {
-    debugf("FT64 r2p: showOverlay\n");
+    debugf("[FT64DIAG r2r] OVL show ms=%u game=%dx%d\n",
+           (unsigned)getMillis(), _gameW, _gameH);
     _overlayVisible = true;
     clampMouse();
     _mouseAccumX = (float)_mouseX;
@@ -356,7 +384,8 @@ void OSystem_N64Libdragon::showOverlay() {
 }
 
 void OSystem_N64Libdragon::hideOverlay() {
-    debugf("FT64 r2p: hideOverlay\n");
+    debugf("[FT64DIAG r2r] OVL hide ms=%u game=%dx%d\n",
+           (unsigned)getMillis(), _gameW, _gameH);
     _overlayVisible = false;
     clampMouse();
     _mouseAccumX = (float)_mouseX;
@@ -375,7 +404,8 @@ void OSystem_N64Libdragon::clearOverlay() {
      * overlay remains active. This backend uses fake alpha blending, so copy
      * the current game image into the overlay exactly as the historical N64
      * backend did instead of clearing the overlay to black. */
-    debugf("FT64 r2p: clearOverlay\n");
+    debugf("[FT64DIAG r2r] OVL clear ms=%u game=%dx%d g16dirty=%d\n",
+           (unsigned)getMillis(), _gameW, _gameH, _game16Dirty ? 1 : 0);
 
     if (_game16Dirty)
         rebuildGame16();
@@ -527,7 +557,18 @@ bool OSystem_N64Libdragon::pollEvent(Common::Event &event) {
     serviceAudio();
     serviceTimer();
 
+    ++s_diagPollCalls;
     const uint32 now = getMillis();
+    if (!s_diagLastHeartbeat || (uint32)(now - s_diagLastHeartbeat) >= 1000) {
+        debugf("[FT64DIAG r2r] HB src=poll ms=%u game=%dx%d ovl=%d dirty=%d g16dirty=%d upd=%u poll=%u present=%u copy=%u full=%u pal=%u\n",
+               (unsigned)now, _gameW, _gameH, _overlayVisible ? 1 : 0,
+               _screenDirty ? 1 : 0, _game16Dirty ? 1 : 0,
+               (unsigned)s_diagUpdateCalls, (unsigned)s_diagPollCalls,
+               (unsigned)s_diagPresentCalls, (unsigned)s_diagCopyCalls,
+               (unsigned)s_diagFullBlits, (unsigned)s_diagPaletteCalls);
+        s_diagLastHeartbeat = now;
+    }
+
 
     // libdragon reads Joypads asynchronously from VI. Its public contract says
     // joypad_poll() should synchronize that state once per frame. ScummVM may
@@ -624,7 +665,7 @@ void OSystem_N64Libdragon::unlockMutex(MutexRef mutex) { (void)mutex; }
 void OSystem_N64Libdragon::deleteMutex(MutexRef mutex) { (void)mutex; }
 
 void OSystem_N64Libdragon::quit() {
-    debugf("FT64 r2p: quit requested\n");
+    debugf("[FT64DIAG r2r] QUIT requested ms=%u\n", (unsigned)getMillis());
 }
 
 Common::String OSystem_N64Libdragon::getDefaultConfigFileName() {

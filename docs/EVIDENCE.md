@@ -1,71 +1,72 @@
-# Evidence / design notes — r2q
+# Evidence / design notes — r2r
 
-## Exact source evidence
+## Observed hardware symptom
 
-ScummVM is pinned to:
+Using retail Full Throttle CD data from `sd:/fullthrottle/`, an earlier ROM
+plays the opening SMUSH movie but goes black immediately when the movie ends.
+The r2q ROM had not yet been established as the tested runtime at the time this
+diagnostic branch was requested.
+
+r2r therefore does not infer that the frame-rate backport caused the black
+screen. It instruments the transition instead.
+
+## ScummVM evidence
+
+Pinned ScummVM:
 
 ```text
 f75a652bb7c956f145abe881c87b5dbf5c9ec24b
 ```
 
-libdragon is pinned to:
+The r2r ScummVM patch was generated from the exact pristine files preserved in
+the uploaded r2o build report. It retains the r2q timing backport and adds only
+four sparse SMUSH warning markers:
 
 ```text
-35f85a0797324a5ed0c723203e33ab3c1da94fdd
+SMUSH begin
+SMUSH eof
+SMUSH loop-exit
+SMUSH released
 ```
 
-The uploaded r2o CI report preserved the exact pristine ScummVM files touched by
-the source patch. They establish the real 1.6.0 layout:
+Those warnings flow through the existing OSystem log callback into libdragon's
+debug output.
 
-- `SmushPlayer::handleAnimHeader()` starts at line 906;
-- `Insane::smush_setupSanWithFlu()` starts at line 1402;
-- `Insane::smush_setupSanFromStart()` starts at line 1444;
-- `_smush_setupsan2` is the existing SAN-flags field;
-- AHDR has a six-byte prefix followed by the 0x300-byte palette.
-
-## r2o failure evidence
-
-The integration log failed at exact `git apply --check` before either N64 build
-ran. Replaying the failed r2o patch with `git apply --check --verbose` against
-the preserved pristine files shows three context mismatches caused by omitted
-blank lines. The first INSANE hunk and constructor hunk relocate successfully,
-which also confirms the pinned checkout is the intended source generation.
-
-r2q does not patch the patch or add a fallback. Its one Git patch was generated
-directly from those pristine files.
-
-## Upstream timing behavior
-
-Upstream ScummVM commit
-`9e7e6a08b276ebe5dfdbc79e9a9fc2edcfd12bf8` implements video-dependent frame
-rates for Full Throttle and the DIG demo. r2q carries only the Full Throttle
-behavior needed by this build and adapts it to the verified 1.6.0 layout.
-
-The encoded rate is read after the six-byte AHDR prefix and 0x300-byte palette
-for header major versions greater than 1. SAN flag bit 3 suppresses the
-override. The N64 adaptation reads directly from the existing stream rather than
-allocating a complete AHDR copy.
-
-## Patch policy
-
-Exactly one ScummVM patch touches:
+Patch SHA-256:
 
 ```text
-engines/scumm/insane/insane.cpp
-engines/scumm/smush/smush_player.cpp
-engines/scumm/smush/smush_player.h
-gui/module.mk
+01b2dda2caf28995090bf68158a7f0371ac6bebfb7e6a3991d08669bccec298d
 ```
 
-Validated patch SHA-256:
+The bundle runs exact `git apply --check`, applies the patch once to the saved
+fixture, runs `git diff --check`, and asserts all four expected source paths and
+diagnostic markers before touching the GitHub repository.
+
+## Backend evidence
+
+The project backend already initializes libdragon USB/emulator logging and its
+normal log callback forwards ScummVM messages into that channel. r2r adds:
+
+- a one-second heartbeat reachable from both `updateScreen()` and `pollEvent()`;
+- presentation/copy/palette counters;
+- overlay transition markers;
+- capped Full Throttle filesystem-open and missing-path markers.
+
+The backend project patch SHA-256 is:
 
 ```text
-38ddda23037b45da9c7842245c6442eea8096a029b7141382a43d341a366ca54
+b7feea28fde2339370611be934e685b1f997940aa1f4505555f02e76e571d46a
 ```
 
-The update bundle proves this patch against the exact CI-preserved source fixture
-before publishing. CI independently proves it against a clean pinned checkout
-before compiling.
+Unlike the pinned ScummVM fixture, the update bundle does not carry a second
+copy of the project backend as a validation fixture. Instead it fresh-clones the
+live project and requires an exact `git apply --check` against that clone before
+the backend diagnostics can be applied. A context mismatch aborts the update;
+there is no fuzzy or 3-way fallback.
 
-No fuzzy application, `--3way`, regex rewrite, sed source mutation, or secondary
-patch is permitted.
+## Noise control
+
+There is no per-frame SMUSH logging. Filesystem misses stop after 96 entries,
+filesystem open/write diagnostics stop after 192 operations, and the heartbeat
+is limited to about once per second. This keeps the diagnostic build useful
+without turning USB logging itself into the primary video workload.

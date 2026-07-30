@@ -47,11 +47,12 @@ grep -Fq 'int16 _smush_setupsan2;' "$SCUMMVM/engines/scumm/insane/insane.h"
 grep -Fq '/* _version = */ b.readUint16LE();' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
 grep -Fq 'bool _skipPalette;' "$SCUMMVM/engines/scumm/smush/smush_player.h"
 
-# r2q is a minimal, direct backport to the verified 1.6.0 layout. There is no
-# second patch, regex rewrite, sed mutation, or fuzzy fallback.
-echo "[integrate] checking consolidated r2q source patch against pinned ScummVM"
+# r2r keeps the verified direct timing backport and adds only sparse runtime
+# diagnostics at the SMUSH exit boundary. There is still one ScummVM patch,
+# with no regex rewrite, sed mutation, secondary patch, or fuzzy fallback.
+echo "[integrate] checking consolidated r2r timing+diagnostic patch against pinned ScummVM"
 git -C "$SCUMMVM" apply --check "$PATCH"
-echo "[integrate] applying consolidated r2q source patch once"
+echo "[integrate] applying consolidated r2r timing+diagnostic patch once"
 git -C "$SCUMMVM" apply "$PATCH"
 
 # Verify source-level results, not merely a zero exit code.
@@ -65,13 +66,17 @@ grep -Fq '_curVideoFlags = 0;' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
 grep -Fq 'headerMajorVersion > 1 && subSize >= 0x308' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
 grep -Fq 'video speed override' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
 grep -Fq 'b.skip(0x300);' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
+grep -Fq '[FT64DIAG r2r] SMUSH begin' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
+grep -Fq '[FT64DIAG r2r] SMUSH eof' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
+grep -Fq '[FT64DIAG r2r] SMUSH loop-exit' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
+grep -Fq '[FT64DIAG r2r] SMUSH released' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
 [ "$(grep -Fc '_player->setCurVideoFlags(_smush_setupsan2);' "$SCUMMVM/engines/scumm/insane/insane.cpp")" -eq 3 ]
 # Keep the established 1.6.0 INSANE field rather than importing the later
 # source-layout rename from 2023.
 grep -Fq 'int16 _smush_setupsan2;' "$SCUMMVM/engines/scumm/insane/insane.h"
 # The N64 adaptation deliberately does not allocate the whole AHDR chunk.
 if grep -Fq 'byte *headerContent = (byte *)malloc(subSize' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"; then
-    echo "unexpected whole-AHDR allocation in r2q SMUSH backport" >&2
+    echo "unexpected whole-AHDR allocation in r2r SMUSH backport" >&2
     exit 1
 fi
 
@@ -83,7 +88,8 @@ for rel in \
     mkdir -p "$ART/patched-source/$(dirname "$rel")"
     cp "$SCUMMVM/$rel" "$ART/patched-source/$rel"
 done
-sed -n '205,255p;895,970p' "$SCUMMVM/engines/scumm/smush/smush_player.cpp" > "$ART/smush-player-after.txt"
+sed -n '205,255p;895,970p;1010,1055p;1150,1295p' "$SCUMMVM/engines/scumm/smush/smush_player.cpp" > "$ART/smush-player-after.txt"
+grep -n 'FT64DIAG r2r' "$SCUMMVM/engines/scumm/smush/smush_player.cpp" > "$ART/smush-runtime-diagnostic-markers.txt"
 sed -n '30,120p' "$SCUMMVM/engines/scumm/smush/smush_player.h" > "$ART/smush-header-after.txt"
 sed -n '850,885p;1398,1470p' "$SCUMMVM/engines/scumm/insane/insane.cpp" > "$ART/insane-after.txt"
 
@@ -96,6 +102,14 @@ cp "$SRC/nintendo64_libdragon.cpp" "$DST/"
 cp "$SRC/n64libdragon-fs.h" "$DST/"
 cp "$SRC/n64libdragon-fs.cpp" "$DST/"
 cp "$SRC/Makefile.libdragon" "$DST/Makefile"
+
+# Preserve and prove the sparse runtime diagnostics that will be exercised on hardware.
+cp "$DST/osys_n64_libdragon.cpp" "$ART/backend-osys-r2r.cpp"
+cp "$DST/n64libdragon-fs.cpp" "$ART/backend-fs-r2r.cpp"
+grep -n 'FT64DIAG r2r' "$DST/osys_n64_libdragon.cpp" "$DST/n64libdragon-fs.cpp"     > "$ART/backend-runtime-diagnostic-markers.txt"
+grep -Fq '[FT64DIAG r2r] HB src=poll' "$DST/osys_n64_libdragon.cpp"
+grep -Fq '[FT64DIAG r2r] FS MISS' "$DST/n64libdragon-fs.cpp"
+grep -Fq '[FT64DIAG r2r] FS READ open' "$DST/n64libdragon-fs.cpp"
 
 # Full Throttle / SCUMM v7-v8 evidence gates.
 grep -q 'ifdef ENABLE_SCUMM_7_8' "$SCUMMVM/engines/scumm/module.mk"
@@ -140,5 +154,5 @@ done
 
 git -C "$SCUMMVM" add -N backends/platform/n64libdragon
 git -C "$SCUMMVM" diff --check
-git -C "$SCUMMVM" diff > "$ART/r2q-source-delta.patch"
+git -C "$SCUMMVM" diff > "$ART/r2r-source-delta.patch"
 git -C "$SCUMMVM" status --short > "$ART/scummvm-status-after-integration.txt"

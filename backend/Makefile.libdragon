@@ -1,4 +1,4 @@
-# Full Throttle N64 r2q
+# Full Throttle N64 r2r
 # ScummVM 1.6.0 + libdragon backend.
 
 srcdir := ../../..
@@ -70,7 +70,7 @@ OBJS := \
 
 include $(srcdir)/Makefile.common
 
-TARGET := full-throttle-n64-r2q
+TARGET := full-throttle-n64-r2r
 
 all: $(TARGET).z64
 

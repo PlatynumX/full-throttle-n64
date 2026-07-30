@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-WORKFLOW=".github/workflows/build-full-throttle-r2q.yml"
+WORKFLOW=".github/workflows/build-full-throttle-r2r.yml"
 PATCH="upstream/scummvm-1.6.0-ft64.patch"
 
 echo "[preflight] shell syntax"
@@ -37,21 +37,22 @@ if [ "${#conflict_files[@]}" -ne 0 ]; then
     exit 1
 fi
 
-echo "[preflight] r2q identity and no stale r2o/r2p/r2n workflow"
+echo "[preflight] r2r identity and no stale r2q/r2o/r2p/r2n workflow"
+test ! -e .github/workflows/build-full-throttle-r2q.yml
 test ! -e .github/workflows/build-full-throttle-r2o.yml
 test ! -e .github/workflows/build-full-throttle-r2p.yml
 test ! -e .github/workflows/build-full-throttle-r2n.yml
-grep -Fqx 'name: Build Full Throttle N64 r2q' "$WORKFLOW"
-grep -Fq 'name: full-throttle-n64-r2q-build-report' "$WORKFLOW"
-grep -Fq 'TARGET := full-throttle-n64-r2q' backend/Makefile.libdragon
-grep -Fq 'full-throttle-n64-r2q.z64' scripts/build_scummvm.sh
-grep -Fq 'ft64-sd-probe-r2q.z64' scripts/build_probe.sh
-grep -Fq 'FULL THROTTLE N64 - r2q' probe/sd_probe.c
+grep -Fqx 'name: Build Full Throttle N64 r2r' "$WORKFLOW"
+grep -Fq 'name: full-throttle-n64-r2r-build-report' "$WORKFLOW"
+grep -Fq 'TARGET := full-throttle-n64-r2r' backend/Makefile.libdragon
+grep -Fq 'full-throttle-n64-r2r.z64' scripts/build_scummvm.sh
+grep -Fq 'ft64-sd-probe-r2r.z64' scripts/build_probe.sh
+grep -Fq 'FULL THROTTLE N64 - r2r' probe/sd_probe.c
 # Historical documentation may legitimately mention earlier revisions. Reject only
-# active build/runtime identities that would make r2q publish or report as an older release.
-if grep -RInE --exclude=preflight.sh 'full-throttle-n64-r2(n|o|p)(\.z64|-build-report)|ft64-sd-probe-r2(n|o|p)|Build Full Throttle N64 r2(n|o|p)|FULL THROTTLE N64 - r2(n|o|p)' \
+# Active build/runtime identities must all be r2r. Historical docs may mention earlier releases.
+if grep -RInE --exclude=preflight.sh 'full-throttle-n64-r2(n|o|p|q)(\.z64|-build-report)|ft64-sd-probe-r2(n|o|p|q)|Build Full Throttle N64 r2(n|o|p|q)|FULL THROTTLE N64 - r2(n|o|p|q)' \
     .github scripts backend/Makefile.libdragon probe TERMUX.md; then
-    echo "stale active r2n/r2o/r2p project identity remains" >&2
+    echo "stale active r2n/r2o/r2p/r2q project identity remains" >&2
     exit 1
 fi
 
@@ -61,7 +62,7 @@ test ! -e scripts/fetch_demo.sh
 test ! -e scripts/stage_demo_sd.sh
 if grep -RInE 'ft-dos-demo|fetch_demo|stage_demo|demo-cache|artifacts/sdcard' \
     .github scripts/run_all.sh scripts/publish_termux.sh TERMUX.md .gitignore; then
-    echo "game/demo packaging machinery leaked into r2q" >&2
+    echo "game/demo packaging machinery leaked into r2r" >&2
     exit 1
 fi
 
@@ -85,10 +86,10 @@ if [ "${patch_paths[*]}" != "${expected_paths[*]}" ]; then
     printf 'expected: %s\n' "${expected_paths[*]}" >&2
     exit 1
 fi
-expected_patch_sha='38ddda23037b45da9c7842245c6442eea8096a029b7141382a43d341a366ca54'
+expected_patch_sha='01b2dda2caf28995090bf68158a7f0371ac6bebfb7e6a3991d08669bccec298d'
 actual_patch_sha="$(sha256sum "$PATCH" | awk '{print $1}')"
 if [ "$actual_patch_sha" != "$expected_patch_sha" ]; then
-    echo "consolidated patch digest does not match validated r2q patch" >&2
+    echo "consolidated patch digest does not match validated r2r diagnostic patch" >&2
     echo "actual:   $actual_patch_sha" >&2
     echo "expected: $expected_patch_sha" >&2
     exit 1
@@ -100,9 +101,13 @@ grep -Fq 'video speed override' "$PATCH"
 grep -Fq 'setCurVideoFlags' "$PATCH"
 grep -Fq '_smush_setupsan2' "$PATCH"
 grep -Fq 'subSize >= 0x308' "$PATCH"
+grep -Fq '[FT64DIAG r2r] SMUSH begin' "$PATCH"
+grep -Fq '[FT64DIAG r2r] SMUSH eof' "$PATCH"
+grep -Fq '[FT64DIAG r2r] SMUSH loop-exit' "$PATCH"
+grep -Fq '[FT64DIAG r2r] SMUSH released' "$PATCH"
 grep -Fq 'predictivedialog.o' "$PATCH"
 if grep -Fq 'engines/scumm/insane/insane.h' "$PATCH" || grep -Fq 'engines/scumm/scumm.cpp' "$PATCH"; then
-    echo "r2q patch imported unnecessary later-source files" >&2
+    echo "r2r patch imported unnecessary later-source files" >&2
     exit 1
 fi
 
@@ -134,6 +139,21 @@ grep -Fq 'uint16 *_game16;' backend/osys_n64_libdragon.h
 grep -Fq 'void OSystem_N64Libdragon::rebuildGame16()' backend/osys_n64_libdragon.cpp
 grep -Fq 'if (_game16Dirty)' backend/osys_n64_libdragon.cpp
 grep -Fq 'memcpy(drow + xoff, srow, _gameW * sizeof(uint16));' backend/osys_n64_libdragon.cpp
+
+echo "[preflight] sparse SummerCart runtime diagnostics"
+grep -Fq '[FT64DIAG r2r] BOOT backend starting' backend/osys_n64_libdragon.cpp
+grep -Fq '[FT64DIAG r2r] HB src=poll' backend/osys_n64_libdragon.cpp
+grep -Fq '[FT64DIAG r2r] OVL hide' backend/osys_n64_libdragon.cpp
+grep -Fq '[FT64DIAG r2r] FS MISS' backend/n64libdragon-fs.cpp
+grep -Fq '[FT64DIAG r2r] FS READ open' backend/n64libdragon-fs.cpp
+grep -Fq 'kDiagFsMissLimit = 96' backend/n64libdragon-fs.cpp
+grep -Fq 'kDiagFsOpLimit = 192' backend/n64libdragon-fs.cpp
+grep -Fq 'sc64-termux-log/sc64-listen' scripts/record_sc64_log.sh
+grep -Fq 'ft64-sc64-' scripts/record_sc64_log.sh
+if grep -RInF 'FT64 r2p:' backend; then
+    echo "stale pre-diagnostic backend log identity remains" >&2
+    exit 1
+fi
 
 echo "[preflight] retained overlay transition correction"
 grep -Fq 'void OSystem_N64Libdragon::showOverlay()' backend/osys_n64_libdragon.cpp
@@ -190,6 +210,8 @@ grep -Fq 'git -C "$SCUMMVM" apply --check "$PATCH"' scripts/integrate_backend.sh
 [ "$(grep -Fc 'git -C "$SCUMMVM" apply "$PATCH"' scripts/integrate_backend.sh)" -eq 1 ]
 grep -Fq 'smush-header-before.txt' scripts/integrate_backend.sh
 grep -Fq 'smush-header-after.txt' scripts/integrate_backend.sh
+grep -Fq 'smush-runtime-diagnostic-markers.txt' scripts/integrate_backend.sh
+grep -Fq 'backend-runtime-diagnostic-markers.txt' scripts/integrate_backend.sh
 grep -Fq 'make -C "$DST" -pn' scripts/integrate_backend.sh
 grep -Fq 'gui/libgui.a' scripts/integrate_backend.sh
 grep -Fq 'engines/scumm/libscumm.a' scripts/integrate_backend.sh

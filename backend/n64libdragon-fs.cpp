@@ -5,9 +5,14 @@
 #include "common/str.h"
 
 #include <dir.h>
+#include <libdragon.h>
 #include <string.h>
 
 static const char *kN64SdRoot = "sd:/";
+static uint32_t s_diagFsMisses = 0;
+static uint32_t s_diagFsOps = 0;
+static const uint32_t kDiagFsMissLimit = 96;
+static const uint32_t kDiagFsOpLimit = 192;
 
 static Common::String canonicalizeN64Path(const Common::String &input) {
     Common::String path = input;
@@ -98,6 +103,10 @@ void N64LibdragonFilesystemNode::setFlags() {
 
     dir_t entry;
     if (!findEntryInDirectory(parent, name, entry)) {
+        if (_path.hasPrefix("sd:/fullthrottle/") && s_diagFsMisses < kDiagFsMissLimit) {
+            debugf("[FT64DIAG r2r] FS MISS %s\n", _path.c_str());
+            ++s_diagFsMisses;
+        }
         _isValid = false;
         _isDirectory = false;
         return;
@@ -196,15 +205,35 @@ AbstractFSNode *N64LibdragonFilesystemNode::getParent() const {
 }
 
 Common::SeekableReadStream *N64LibdragonFilesystemNode::createReadStream() {
-    if (!_isValid || _isDirectory)
+    const bool diag = _path.hasPrefix("sd:/fullthrottle") && s_diagFsOps < kDiagFsOpLimit;
+    if (diag) ++s_diagFsOps;
+    if (!_isValid || _isDirectory) {
+        if (diag)
+            debugf("[FT64DIAG r2r] FS READ deny valid=%d dir=%d path=%s\n",
+                   _isValid ? 1 : 0, _isDirectory ? 1 : 0, _path.c_str());
         return 0;
-    return StdioStream::makeFromPath(_path, false);
+    }
+    if (diag) debugf("[FT64DIAG r2r] FS READ open %s\n", _path.c_str());
+    Common::SeekableReadStream *stream = StdioStream::makeFromPath(_path, false);
+    if (diag)
+        debugf("[FT64DIAG r2r] FS READ result=%d path=%s\n",
+               stream ? 1 : 0, _path.c_str());
+    return stream;
 }
 
 Common::WriteStream *N64LibdragonFilesystemNode::createWriteStream() {
-    if (_isDirectory)
+    const bool diag = _path.hasPrefix("sd:/fullthrottle") && s_diagFsOps < kDiagFsOpLimit;
+    if (diag) ++s_diagFsOps;
+    if (_isDirectory) {
+        if (diag) debugf("[FT64DIAG r2r] FS WRITE deny-dir %s\n", _path.c_str());
         return 0;
-    return StdioStream::makeFromPath(_path, true);
+    }
+    if (diag) debugf("[FT64DIAG r2r] FS WRITE open %s\n", _path.c_str());
+    Common::WriteStream *stream = StdioStream::makeFromPath(_path, true);
+    if (diag)
+        debugf("[FT64DIAG r2r] FS WRITE result=%d path=%s\n",
+               stream ? 1 : 0, _path.c_str());
+    return stream;
 }
 
 AbstractFSNode *N64LibdragonFilesystemFactory::makeCurrentDirectoryFileNode() const {

@@ -1,90 +1,79 @@
-# Full Throttle N64 r2q
+# Full Throttle N64 r2r — retail transition diagnostics
 
-Full Throttle-only ScummVM 1.6.0 port for Nintendo 64, using libdragon and
-SummerCart SD storage.
+r2r is a deliberately sparse diagnostic build based on the verified r2q
+ScummVM timing backport. Its immediate target is the retail-CD behavior observed
+on hardware: the opening SMUSH movie completes and the display then goes black.
 
-## Hardware baseline
+No renderer optimization is being attempted in this revision. The point is to
+separate four cases with SummerCart USB evidence:
 
-r2m builds and runs on real N64 hardware with an Expansion Pak. Full Throttle
-launches from `sd:/fullthrottle/`, the opening SMUSH movie plays, and gameplay is
-reached. The hardware-proven r2m controller path, SD/save path, audio setup,
-preconverted 16-bit presentation path, and later overlay transition correction
-are retained.
+1. SMUSH never exits cleanly.
+2. SMUSH exits but the SCUMM event/main loop stops advancing.
+3. The loop advances but no new screen presentation occurs.
+4. A retail resource/path lookup fails around the transition.
 
-The active runtime target remains smoother/correct SMUSH timing.
+## Runtime markers
 
-## What the r2o CI report proved
+The libdragon backend already sends debug output to USB and emulator logs.
+r2r adds a low-volume `[FT64DIAG r2r]` stream:
 
-The r2o integration gate correctly stopped before compilation because its
-consolidated patch did not apply exactly to pinned ScummVM:
+- boot/backend initialization;
+- video `initSize`;
+- one heartbeat per second from rendering or `pollEvent`, including cumulative
+  update, poll, present, copy, full-frame, and palette counters;
+- overlay show/hide/clear transitions;
+- the first 96 missing paths under `sd:/fullthrottle/`;
+- the first 192 Full Throttle filesystem open/write operations;
+- SMUSH begin, EOF, loop exit, and post-release markers.
 
-```text
-f75a652bb7c956f145abe881c87b5dbf5c9ec24b
-```
+The filesystem counters are capped and SMUSH logging is transition-only so USB
+traffic does not become a frame-by-frame performance perturbation.
 
-The pristine files preserved by that run show that three r2o hunks omitted blank
-lines present in the exact 1.6.0 source:
+## Full retail data
 
-- after `_smush_setupsan2 = setupsan2;` in `smush_setupSanWithFlu()`;
-- after the AHDR size assertion in `handleAnimHeader()`;
-- between `_skipPalette` and `public:` in `SmushPlayer`.
-
-`git apply --check --verbose` reproduces those exact context failures. This was
-a patch-construction error, not a different pinned revision and not a compiler
-failure.
-
-## r2q correction
-
-r2q discards the failed r2o patch and regenerates the one consolidated Git patch
-from the exact pristine source files preserved by that CI run.
-
-The Full Throttle timing behavior remains adapted from upstream ScummVM commit:
+The executable remains data-agnostic between demo and retail and launches:
 
 ```text
-9e7e6a08b276ebe5dfdbc79e9a9fc2edcfd12bf8
-SCUMM: INSANE/SMUSH: Implement video file dependent frame rate
+-p sd:/fullthrottle ft
 ```
 
-For Full Throttle, r2q:
+No copyrighted Full Throttle data is downloaded, embedded, or packaged.
 
-- synchronizes the current INSANE SAN flags at the three verified 1.6.0
-  assignment sites;
-- reads AHDR major/minor version directly from the existing stream;
-- reads the encoded frame rate after the six-byte prefix and 0x300-byte palette;
-- applies a non-zero encoded rate for header versions greater than 1 when SAN
-  flag bit 3 is clear;
-- preserves `_skipPalette` behavior while still advancing to the rate field;
-- avoids the later upstream whole-AHDR allocation;
-- leaves `insane.h` and `scumm.cpp` untouched because their later-source changes
-  are unnecessary for this Full-Throttle-only build.
+## Pinned source
 
-The existing `gui/predictivedialog.o` removal remains in that same patch.
+ScummVM:
+`f75a652bb7c956f145abe881c87b5dbf5c9ec24b`
 
-## Verification
+libdragon:
+`35f85a0797324a5ed0c723203e33ab3c1da94fdd`
 
-The update bundle contains the four exact pristine files preserved by r2o CI and
-runs `git apply --check`, applies the patch once, and runs `git diff --check`
-against them locally before it is allowed to push r2q.
+The one ScummVM patch still touches only:
 
-GitHub CI independently fetches pinned ScummVM from scratch and repeats the exact
-patch check/application before any N64 compilation. It then verifies patched
-source, the generated Make database, required Full Throttle objects, and
-`git diff --check`.
+```text
+engines/scumm/insane/insane.cpp
+engines/scumm/smush/smush_player.cpp
+engines/scumm/smush/smush_player.h
+gui/module.mk
+```
 
-There is no `--3way`, fuzzy application, sed/regex source mutation, or patch
-stack.
+Its SHA-256 is:
 
-## Game data
+```text
+01b2dda2caf28995090bf68158a7f0371ac6bebfb7e6a3991d08669bccec298d
+```
 
-No Full Throttle game/demo data is downloaded, embedded, staged, or uploaded.
-The ROM expects existing data at `sd:/fullthrottle/` and saves at
-`sd:/fullthrottle/saves/`.
+The update bundle validates that patch against the exact pristine pinned files
+saved by the r2o CI artifact before it is allowed to touch GitHub.
 
 ## Build output
 
 ```text
-ft64-sd-probe-r2q.z64
-full-throttle-n64-r2q.z64
+ft64-sd-probe-r2r.z64
+full-throttle-n64-r2r.z64
 ```
 
-Build artifact: `full-throttle-n64-r2q-build-report`.
+Artifact:
+
+```text
+full-throttle-n64-r2r-build-report
+```

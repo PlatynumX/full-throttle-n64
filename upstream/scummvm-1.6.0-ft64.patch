@@ -27,7 +27,7 @@ index 44528e5..2417396 100644
  	_smush_isSanFileSetup = 1;
  	smush_setFrameSteps(step1, step2);
 diff --git a/engines/scumm/smush/smush_player.cpp b/engines/scumm/smush/smush_player.cpp
-index ce098f0..0649b84 100644
+index ce098f0..dfed277 100644
 --- a/engines/scumm/smush/smush_player.cpp
 +++ b/engines/scumm/smush/smush_player.cpp
 @@ -236,6 +236,7 @@ SmushPlayer::SmushPlayer(ScummEngine_v7 *scumm) {
@@ -83,6 +83,38 @@ index ce098f0..0649b84 100644
  SmushFont *SmushPlayer::getFont(int font) {
  	char file_font[11];
  
+@@ -1019,6 +1037,8 @@ void SmushPlayer::parseNextFrame() {
+ 	const int32 subOffset = _base->pos();
+ 
+ 	if (_base->pos() >= (int32)_baseSize) {
++		warning("[FT64DIAG r2r] SMUSH eof frame=%d pos=%d size=%d",
++		        _frame, (int)_base->pos(), (int)_baseSize);
+ 		_vm->_smushVideoShouldFinish = true;
+ 		_endOfFile = true;
+ 		return;
+@@ -1141,6 +1161,8 @@ void SmushPlayer::unpause() {
+ }
+ 
+ void SmushPlayer::play(const char *filename, int32 speed, int32 offset, int32 startFrame) {
++	warning("[FT64DIAG r2r] SMUSH begin file=%s speed=%d offset=%d start=%d", filename, speed, offset, startFrame);
++
+ 	// Verify the specified file exists
+ 	ScummFile f;
+ 	_vm->openFile(f, filename);
+@@ -1252,7 +1274,13 @@ void SmushPlayer::play(const char *filename, int32 speed, int32 offset, int32 st
+ 		_vm->_system->delayMillis(10);
+ 	}
+ 
++	warning("[FT64DIAG r2r] SMUSH loop-exit file=%s frame=%d total=%d eof=%d finish=%d save=%d quit=%d",
++	        filename, _frame, _nbframes, _endOfFile ? 1 : 0,
++	        _vm->_smushVideoShouldFinish ? 1 : 0, _vm->_saveLoadFlag,
++	        _vm->shouldQuit() ? 1 : 0);
+ 	release();
++	warning("[FT64DIAG r2r] SMUSH released file=%s active=%d fullRedraw=%d",
++	        filename, _vm->_smushActive ? 1 : 0, _vm->_fullRedraw ? 1 : 0);
+ 
+ 	// Reset mouse state
+ 	CursorMan.showMouse(oldMouseState);
 diff --git a/engines/scumm/smush/smush_player.h b/engines/scumm/smush/smush_player.h
 index 5a20240..a7707c7 100644
 --- a/engines/scumm/smush/smush_player.h
