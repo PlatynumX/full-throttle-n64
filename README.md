@@ -1,42 +1,59 @@
-# Full Throttle N64 r2s — heap diagnostics
+# Full Throttle N64 r2t — allocator diagnostics
 
-Full Throttle-only ScummVM 1.6.0 port for Nintendo 64/libdragon.
+This is the corrected r2t diagnostic build for the retail Full Throttle
+allocation crash.
 
-## Why r2s exists
+## What r2s proved
 
-The r2r SummerCart trace reached retail Full Throttle gameplay content and then
-terminated in `operator new` while `ResourceManager::createResource()` was
-loading an iMUSE sound resource. The file-open diagnostics showed no missing CD
-files around that crash.
+The r2s CI run stopped before compilation because its `resource.cpp` diagnostic
+hunk did not apply to the real pinned ScummVM source. That patch is discarded.
 
-r2s keeps all r2r SMUSH, filesystem, renderer, input, SD/save, and transition
-diagnostics and adds allocation telemetry at the exact resource allocator.
+## r2t design
 
-## Runtime output
-
-Each heartbeat now includes libdragon heap usage and free bytes. Sound-resource
-and >=64 KiB resource allocations emit four snapshots:
+The one ScummVM patch is back to the four exact files already validated by the
+r2q/r2r integration work:
 
 ```text
-[FT64DIAG r2s] RES phase=request ...
-[FT64DIAG r2s] RES phase=after-nuke ...
-[FT64DIAG r2s] RES phase=after-expire ...
-[FT64DIAG r2s] RES phase=allocated ...
+engines/scumm/insane/insane.cpp
+engines/scumm/smush/smush_player.cpp
+engines/scumm/smush/smush_player.h
+gui/module.mk
 ```
 
-Each line includes resource type/id, requested bytes, ScummVM resource-cache
-bytes, minimum/maximum cache thresholds, and real libdragon heap used/total/free.
-If `after-expire` is the final line before `operator new`, its numbers distinguish
-insufficient free memory from likely heap fragmentation.
+`resource.cpp` is untouched.
 
-No retail/demo data is included or fetched. Game data remains on
-`sd:/fullthrottle/`.
+Heap telemetry is instead placed at the N64 backend's global `operator new` and
+`operator new[]` boundary—the allocation path reached by the crash trace.
 
-Build outputs:
+Large allocations and every failed allocation report:
 
 ```text
-ft64-sd-probe-r2s.z64
-full-throttle-n64-r2s.z64
+[FT64DIAG r2t] NEW phase=request kind=array size=...
+[FT64DIAG r2t] NEW phase=allocated kind=array size=...
+[FT64DIAG r2t] NEW phase=failed kind=array size=...
 ```
 
-Artifact: `full-throttle-n64-r2s-build-report`.
+Each line includes requested bytes and libdragon heap used, total, and free
+bytes. Logging is enabled only after USB debug initialization and guarded
+against recursive diagnostic allocation.
+
+The backend is compiled with `-fno-exceptions`, so allocation failure is logged
+and then stopped with `abort()` rather than using a C++ throw.
+
+Existing r2r/r2s filesystem, SMUSH lifecycle, screen heartbeat, overlay,
+controller, SD, and save diagnostics remain.
+
+No game data is included or fetched. Runtime data remains at:
+
+```text
+sd:/fullthrottle/
+```
+
+Outputs:
+
+```text
+ft64-sd-probe-r2t.z64
+full-throttle-n64-r2t.z64
+```
+
+Artifact: `full-throttle-n64-r2t-build-report`.

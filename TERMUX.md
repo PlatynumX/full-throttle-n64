@@ -1,7 +1,13 @@
-# Full Throttle N64 r2s — Termux
+# Full Throttle N64 r2t — Termux
 
-Use the standalone r2s update bundle. It exact-checks both the consolidated
-ScummVM patch and the backend delta before changing GitHub, then runs the full
-project preflight and refuses a moving remote.
+Use the corrected `full-throttle-n64-r2t-allocator-diagnostics-update-v2.zip`.
 
-No game data is downloaded or packaged.
+The updater first proves the four-file ScummVM patch against the exact pinned
+fixture and proves the allocator patch against the exact reconstructed r2s
+backend included in the package.
+
+It then fresh-clones GitHub, verifies the live project is still the failed r2s
+baseline, applies the backend patch exactly, installs r2t, runs preflight,
+checks the exact staged path set, and refuses to push if master moves.
+
+No game/demo data is fetched or packaged.

@@ -1,61 +1,64 @@
-# Evidence — r2s heap diagnostics
+# Evidence / design notes — r2t corrected package
 
-## Observed r2r failure
+## Corrected validation baseline
 
-The hardware trace ended in this call chain:
+The first r2t ZIP contained r2r backend fixture files while its fixture manifest
+listed the reconstructed r2s hashes. Its checksum gate correctly refused to
+continue before cloning or modifying GitHub.
+
+This package reconstructs and includes the actual r2s backend:
 
 ```text
-operator new
-ResourceManager::createResource
-ScummEngine::readSoundResource
-ImuseDigiSndMgr::openSound
-IMuseDigital::startMusic
-IMuseDigital::playFtMusic
+backend/osys_n64_libdragon.cpp
+0fa15967558b1ab423b0e05e5fe2686e7fbd46c48449def1ea5fd7d7291dfbef
+
+backend/n64libdragon-fs.cpp
+a5b171e75ea987e242a053c9390c88772b9a7d4c07c646d9b9d25a6f18173f34
 ```
 
-The crash occurred after successful opens of the retail Full Throttle data and
-video files. r2s therefore diagnoses allocation pressure before changing cache,
-music, or renderer behavior.
+The backend diagnostic patch is generated only after committing that exact r2s
+baseline.
 
-## Pinned contracts
+## ScummVM patch
 
-ScummVM: `f75a652bb7c956f145abe881c87b5dbf5c9ec24b`
-
-libdragon: `35f85a0797324a5ed0c723203e33ab3c1da94fdd`
-
-The pinned libdragon header exposes `heap_stats_t { total, used }` and
-`sys_get_heap_stats(heap_stats_t *)`. r2s calls that exact API.
-
-## Consolidated source patch
+The consolidated ScummVM patch touches exactly four files and does not touch
+`resource.cpp`.
 
 SHA-256:
 
 ```text
-9a90e18017552355e2e75eb0a5615f469273892d316a4e84a51d1157dcfbc041
+e1af9d2c0a4f8e6a0c745817ba931e214e53e5ebd7091118a831838c70fd35bf
 ```
 
-It touches exactly:
+## Backend allocator patch
 
-```text
-engines/scumm/insane/insane.cpp
-engines/scumm/resource.cpp
-engines/scumm/smush/smush_player.cpp
-engines/scumm/smush/smush_player.h
-gui/module.mk
-```
-
-The resource instrumentation does not alter allocation size, cache expiry, or
-exception behavior. It snapshots before/after the existing nuke/expiry path and
-after successful allocation.
-
-## Backend delta
+The allocator patch transforms exact r2s into r2t.
 
 SHA-256:
 
 ```text
-6db298a043414edef8d1b630ce338ebf15758a0ee7a270c3feca5c6ac492ebd1
+b069c1335f521258d73b8d46dc40d15201a9d75ce7764017248535cad0ec35f2
 ```
 
-The delta is generated from the exact reconstructed r2r backend that produced
-the uploaded hardware logs. It relabels markers to r2s, adds the resource-heap
-bridge, and appends heap stats to the one-second heartbeat.
+It instruments normal object and array allocation, reports allocations of at
+least 64 KiB plus every failed allocation, and reads libdragon heap statistics
+at the allocation boundary.
+
+Because the N64 backend is compiled with `-fno-exceptions`, the diagnostic
+failure path does not use `throw`; it logs the failure and calls `abort()`.
+
+## Validation policy
+
+Both patches are independently tested with:
+
+```text
+git apply --check
+git apply
+git diff --check
+```
+
+The package also verifies the exact post-patch backend hashes, shell syntax,
+internal checksums, staged-path policy, and ZIP integrity.
+
+No fuzzy application, `--3way`, rebase, regex source mutation, or fallback
+patching is used.
