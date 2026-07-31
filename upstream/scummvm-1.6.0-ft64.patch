@@ -87,7 +87,7 @@ index ce098f0..dfed277 100644
  	const int32 subOffset = _base->pos();
  
  	if (_base->pos() >= (int32)_baseSize) {
-+		warning("[FT64DIAG r2r] SMUSH eof frame=%d pos=%d size=%d",
++		warning("[FT64DIAG r2s] SMUSH eof frame=%d pos=%d size=%d",
 +		        _frame, (int)_base->pos(), (int)_baseSize);
  		_vm->_smushVideoShouldFinish = true;
  		_endOfFile = true;
@@ -96,7 +96,7 @@ index ce098f0..dfed277 100644
  }
  
  void SmushPlayer::play(const char *filename, int32 speed, int32 offset, int32 startFrame) {
-+	warning("[FT64DIAG r2r] SMUSH begin file=%s speed=%d offset=%d start=%d", filename, speed, offset, startFrame);
++	warning("[FT64DIAG r2s] SMUSH begin file=%s speed=%d offset=%d start=%d", filename, speed, offset, startFrame);
 +
  	// Verify the specified file exists
  	ScummFile f;
@@ -105,12 +105,12 @@ index ce098f0..dfed277 100644
  		_vm->_system->delayMillis(10);
  	}
  
-+	warning("[FT64DIAG r2r] SMUSH loop-exit file=%s frame=%d total=%d eof=%d finish=%d save=%d quit=%d",
++	warning("[FT64DIAG r2s] SMUSH loop-exit file=%s frame=%d total=%d eof=%d finish=%d save=%d quit=%d",
 +	        filename, _frame, _nbframes, _endOfFile ? 1 : 0,
 +	        _vm->_smushVideoShouldFinish ? 1 : 0, _vm->_saveLoadFlag,
 +	        _vm->shouldQuit() ? 1 : 0);
  	release();
-+	warning("[FT64DIAG r2r] SMUSH released file=%s active=%d fullRedraw=%d",
++	warning("[FT64DIAG r2s] SMUSH released file=%s active=%d fullRedraw=%d",
 +	        filename, _vm->_smushActive ? 1 : 0, _vm->_fullRedraw ? 1 : 0);
  
  	// Reset mouse state
@@ -147,3 +147,63 @@ index bda3c88..466273c 100644
  	saveload.o \
  	saveload-dialog.o \
  	themebrowser.o \
+diff --git a/engines/scumm/resource.cpp b/engines/scumm/resource.cpp
+--- a/engines/scumm/resource.cpp
++++ b/engines/scumm/resource.cpp
+@@ -35,7 +35,13 @@
+ #include "scumm/sound.h"
+ #include "scumm/util.h"
+ #include "scumm/verbs.h"
+ 
++#ifdef __N64__
++void ft64_diag_resource_heap(const char *phase, int type, unsigned int idx,
++		unsigned int requestSize, unsigned int resourceAllocated,
++		int minThreshold, int maxThreshold);
++#endif
++
+ namespace Scumm {
+ 
+ enum {
+@@ -752,6 +759,13 @@ byte ResourceManager::Resource::getResourceCounter() const {
+ /* 2 bytes safety area to make "precaching" of bytes in the gdi drawer easier */
+ #define SAFETY_AREA 2
+ byte *ResourceManager::createResource(ResType type, ResId idx, uint32 size) {
++#ifdef __N64__
++	const bool ft64DiagAllocation = (type == rtSound || size >= 65536);
++	if (ft64DiagAllocation)
++		ft64_diag_resource_heap("request", (int)type, (unsigned int)idx,
++			(unsigned int)(size + SAFETY_AREA), (unsigned int)_allocatedSize,
++			_minHeapThreshold, _maxHeapThreshold);
++#endif
+ 	debugC(DEBUG_RESOURCE, "_res->createResource(%s,%d,%d)", nameOfResType(type), idx, size);
+ 
+ 	if (!validateResource("allocating", type, idx))
+@@ -766,10 +780,28 @@ byte *ResourceManager::createResource(ResType type, ResId idx, uint32 size) {
+ 	}
+ 
+ 	nukeResource(type, idx);
++#ifdef __N64__
++	if (ft64DiagAllocation)
++		ft64_diag_resource_heap("after-nuke", (int)type, (unsigned int)idx,
++			(unsigned int)(size + SAFETY_AREA), (unsigned int)_allocatedSize,
++			_minHeapThreshold, _maxHeapThreshold);
++#endif
+ 
+ 	expireResources(size);
++#ifdef __N64__
++	if (ft64DiagAllocation)
++		ft64_diag_resource_heap("after-expire", (int)type, (unsigned int)idx,
++			(unsigned int)(size + SAFETY_AREA), (unsigned int)_allocatedSize,
++			_minHeapThreshold, _maxHeapThreshold);
++#endif
+ 
+ 	byte *ptr = new byte[size + SAFETY_AREA];
++#ifdef __N64__
++	if (ft64DiagAllocation)
++		ft64_diag_resource_heap("allocated", (int)type, (unsigned int)idx,
++			(unsigned int)(size + SAFETY_AREA), (unsigned int)_allocatedSize,
++			_minHeapThreshold, _maxHeapThreshold);
++#endif
+ 	if (ptr == NULL) {
+ 		error("createResource(%s,%d): Out of memory while allocating %d", nameOfResType(type), idx, size);
+ 	}

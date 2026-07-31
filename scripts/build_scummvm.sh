@@ -4,7 +4,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SCUMMVM="$ROOT/work/scummvm"
 PORT="$SCUMMVM/backends/platform/n64libdragon"
 ART="$ROOT/artifacts"
-ROM="full-throttle-n64-r2r.z64"
+ROM="full-throttle-n64-r2s.z64"
 mkdir -p "$ART"
 
 set +e
@@ -15,7 +15,7 @@ set -e
 
 if [ "$rc" -eq 0 ] && [ -f "$PORT/$ROM" ]; then
     cp "$PORT/$ROM" "$ART/$ROM"
-    sha256sum "$ART/$ROM" > "$ART/full-throttle-n64-r2r.sha256"
+    sha256sum "$ART/$ROM" > "$ART/full-throttle-n64-r2s.sha256"
     printf 'PASS\n' > "$ART/scummvm-build-status.txt"
 else
     fail_rc="$rc"

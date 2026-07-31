@@ -27,6 +27,7 @@ fi
 for rel in \
     gui/module.mk \
     engines/scumm/insane/insane.cpp \
+    engines/scumm/resource.cpp \
     engines/scumm/smush/smush_player.cpp \
     engines/scumm/smush/smush_player.h; do
     mkdir -p "$ART/pristine-source/$(dirname "$rel")"
@@ -38,6 +39,7 @@ sed -n '1,45p' "$SCUMMVM/gui/module.mk" > "$ART/gui-module-before.txt"
 sed -n '205,250p;895,955p' "$SCUMMVM/engines/scumm/smush/smush_player.cpp" > "$ART/smush-player-before.txt"
 sed -n '30,115p' "$SCUMMVM/engines/scumm/smush/smush_player.h" > "$ART/smush-header-before.txt"
 sed -n '850,880p;1398,1465p' "$SCUMMVM/engines/scumm/insane/insane.cpp" > "$ART/insane-before.txt"
+sed -n '20,55p;748,790p' "$SCUMMVM/engines/scumm/resource.cpp" > "$ART/resource-create-before.txt"
 
 if [ "$(grep -c '^[[:space:]]*predictivedialog\.o[[:space:]]*\\' "$SCUMMVM/gui/module.mk")" -ne 1 ]; then
     echo "expected exactly one predictivedialog.o entry in pristine gui/module.mk" >&2
@@ -47,12 +49,12 @@ grep -Fq 'int16 _smush_setupsan2;' "$SCUMMVM/engines/scumm/insane/insane.h"
 grep -Fq '/* _version = */ b.readUint16LE();' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
 grep -Fq 'bool _skipPalette;' "$SCUMMVM/engines/scumm/smush/smush_player.h"
 
-# r2r keeps the verified direct timing backport and adds only sparse runtime
+# r2s keeps the verified direct timing backport and adds only sparse runtime
 # diagnostics at the SMUSH exit boundary. There is still one ScummVM patch,
 # with no regex rewrite, sed mutation, secondary patch, or fuzzy fallback.
-echo "[integrate] checking consolidated r2r timing+diagnostic patch against pinned ScummVM"
+echo "[integrate] checking consolidated r2s timing+diagnostic patch against pinned ScummVM"
 git -C "$SCUMMVM" apply --check "$PATCH"
-echo "[integrate] applying consolidated r2r timing+diagnostic patch once"
+echo "[integrate] applying consolidated r2s timing+diagnostic patch once"
 git -C "$SCUMMVM" apply "$PATCH"
 
 # Verify source-level results, not merely a zero exit code.
@@ -66,30 +68,39 @@ grep -Fq '_curVideoFlags = 0;' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
 grep -Fq 'headerMajorVersion > 1 && subSize >= 0x308' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
 grep -Fq 'video speed override' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
 grep -Fq 'b.skip(0x300);' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
-grep -Fq '[FT64DIAG r2r] SMUSH begin' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
-grep -Fq '[FT64DIAG r2r] SMUSH eof' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
-grep -Fq '[FT64DIAG r2r] SMUSH loop-exit' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
-grep -Fq '[FT64DIAG r2r] SMUSH released' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
+grep -Fq '[FT64DIAG r2s] SMUSH begin' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
+grep -Fq '[FT64DIAG r2s] SMUSH eof' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
+grep -Fq '[FT64DIAG r2s] SMUSH loop-exit' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
+grep -Fq '[FT64DIAG r2s] SMUSH released' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
+grep -Fq 'void ft64_diag_resource_heap(' "$SCUMMVM/engines/scumm/resource.cpp"
+grep -Fq 'ft64_diag_resource_heap("request"' "$SCUMMVM/engines/scumm/resource.cpp"
+grep -Fq 'ft64_diag_resource_heap("after-nuke"' "$SCUMMVM/engines/scumm/resource.cpp"
+grep -Fq 'ft64_diag_resource_heap("after-expire"' "$SCUMMVM/engines/scumm/resource.cpp"
+grep -Fq 'ft64_diag_resource_heap("allocated"' "$SCUMMVM/engines/scumm/resource.cpp"
+grep -Fq 'const bool ft64DiagAllocation = (type == rtSound || size >= 65536);' "$SCUMMVM/engines/scumm/resource.cpp"
 [ "$(grep -Fc '_player->setCurVideoFlags(_smush_setupsan2);' "$SCUMMVM/engines/scumm/insane/insane.cpp")" -eq 3 ]
 # Keep the established 1.6.0 INSANE field rather than importing the later
 # source-layout rename from 2023.
 grep -Fq 'int16 _smush_setupsan2;' "$SCUMMVM/engines/scumm/insane/insane.h"
 # The N64 adaptation deliberately does not allocate the whole AHDR chunk.
 if grep -Fq 'byte *headerContent = (byte *)malloc(subSize' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"; then
-    echo "unexpected whole-AHDR allocation in r2r SMUSH backport" >&2
+    echo "unexpected whole-AHDR allocation in r2s SMUSH backport" >&2
     exit 1
 fi
 
 for rel in \
     gui/module.mk \
     engines/scumm/insane/insane.cpp \
+    engines/scumm/resource.cpp \
     engines/scumm/smush/smush_player.cpp \
     engines/scumm/smush/smush_player.h; do
     mkdir -p "$ART/patched-source/$(dirname "$rel")"
     cp "$SCUMMVM/$rel" "$ART/patched-source/$rel"
 done
 sed -n '205,255p;895,970p;1010,1055p;1150,1295p' "$SCUMMVM/engines/scumm/smush/smush_player.cpp" > "$ART/smush-player-after.txt"
-grep -n 'FT64DIAG r2r' "$SCUMMVM/engines/scumm/smush/smush_player.cpp" > "$ART/smush-runtime-diagnostic-markers.txt"
+grep -n 'FT64DIAG r2s' "$SCUMMVM/engines/scumm/smush/smush_player.cpp" > "$ART/smush-runtime-diagnostic-markers.txt"
+sed -n '20,60p;748,815p' "$SCUMMVM/engines/scumm/resource.cpp" > "$ART/resource-create-after.txt"
+grep -n 'ft64_diag_resource_heap' "$SCUMMVM/engines/scumm/resource.cpp" > "$ART/resource-heap-diagnostic-markers.txt"
 sed -n '30,120p' "$SCUMMVM/engines/scumm/smush/smush_player.h" > "$ART/smush-header-after.txt"
 sed -n '850,885p;1398,1470p' "$SCUMMVM/engines/scumm/insane/insane.cpp" > "$ART/insane-after.txt"
 
@@ -104,12 +115,15 @@ cp "$SRC/n64libdragon-fs.cpp" "$DST/"
 cp "$SRC/Makefile.libdragon" "$DST/Makefile"
 
 # Preserve and prove the sparse runtime diagnostics that will be exercised on hardware.
-cp "$DST/osys_n64_libdragon.cpp" "$ART/backend-osys-r2r.cpp"
-cp "$DST/n64libdragon-fs.cpp" "$ART/backend-fs-r2r.cpp"
-grep -n 'FT64DIAG r2r' "$DST/osys_n64_libdragon.cpp" "$DST/n64libdragon-fs.cpp"     > "$ART/backend-runtime-diagnostic-markers.txt"
-grep -Fq '[FT64DIAG r2r] HB src=poll' "$DST/osys_n64_libdragon.cpp"
-grep -Fq '[FT64DIAG r2r] FS MISS' "$DST/n64libdragon-fs.cpp"
-grep -Fq '[FT64DIAG r2r] FS READ open' "$DST/n64libdragon-fs.cpp"
+cp "$DST/osys_n64_libdragon.cpp" "$ART/backend-osys-r2s.cpp"
+cp "$DST/n64libdragon-fs.cpp" "$ART/backend-fs-r2s.cpp"
+grep -n 'FT64DIAG r2s' "$DST/osys_n64_libdragon.cpp" "$DST/n64libdragon-fs.cpp"     > "$ART/backend-runtime-diagnostic-markers.txt"
+grep -Fq '[FT64DIAG r2s] HB src=poll' "$DST/osys_n64_libdragon.cpp"
+grep -Fq '[FT64DIAG r2s] RES phase=' "$DST/osys_n64_libdragon.cpp"
+grep -Fq 'sys_get_heap_stats(&stats);' "$DST/osys_n64_libdragon.cpp"
+grep -Fq 'sys_get_heap_stats(&heap);' "$DST/osys_n64_libdragon.cpp"
+grep -Fq '[FT64DIAG r2s] FS MISS' "$DST/n64libdragon-fs.cpp"
+grep -Fq '[FT64DIAG r2s] FS READ open' "$DST/n64libdragon-fs.cpp"
 
 # Full Throttle / SCUMM v7-v8 evidence gates.
 grep -q 'ifdef ENABLE_SCUMM_7_8' "$SCUMMVM/engines/scumm/module.mk"
@@ -144,6 +158,7 @@ fi
 printf '%s\n' "$scumm_rule" > "$ART/scumm-lib-rule.txt"
 for required in \
     engines/scumm/insane/insane.o \
+    engines/scumm/resource.o \
     engines/scumm/smush/smush_player.o \
     engines/scumm/imuse_digi/dimuse.o; do
     if [[ "$scumm_rule" != *"$required"* ]]; then
@@ -154,5 +169,5 @@ done
 
 git -C "$SCUMMVM" add -N backends/platform/n64libdragon
 git -C "$SCUMMVM" diff --check
-git -C "$SCUMMVM" diff > "$ART/r2r-source-delta.patch"
+git -C "$SCUMMVM" diff > "$ART/r2s-source-delta.patch"
 git -C "$SCUMMVM" status --short > "$ART/scummvm-status-after-integration.txt"

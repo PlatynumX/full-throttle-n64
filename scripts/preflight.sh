@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-WORKFLOW=".github/workflows/build-full-throttle-r2r.yml"
+WORKFLOW=".github/workflows/build-full-throttle-r2s.yml"
 PATCH="upstream/scummvm-1.6.0-ft64.patch"
 
 echo "[preflight] shell syntax"
@@ -37,22 +37,23 @@ if [ "${#conflict_files[@]}" -ne 0 ]; then
     exit 1
 fi
 
-echo "[preflight] r2r identity and no stale r2q/r2o/r2p/r2n workflow"
+echo "[preflight] r2s identity and no stale r2r/r2q/r2o/r2p/r2n workflow"
+test ! -e .github/workflows/build-full-throttle-r2r.yml
 test ! -e .github/workflows/build-full-throttle-r2q.yml
 test ! -e .github/workflows/build-full-throttle-r2o.yml
 test ! -e .github/workflows/build-full-throttle-r2p.yml
 test ! -e .github/workflows/build-full-throttle-r2n.yml
-grep -Fqx 'name: Build Full Throttle N64 r2r' "$WORKFLOW"
-grep -Fq 'name: full-throttle-n64-r2r-build-report' "$WORKFLOW"
-grep -Fq 'TARGET := full-throttle-n64-r2r' backend/Makefile.libdragon
-grep -Fq 'full-throttle-n64-r2r.z64' scripts/build_scummvm.sh
-grep -Fq 'ft64-sd-probe-r2r.z64' scripts/build_probe.sh
-grep -Fq 'FULL THROTTLE N64 - r2r' probe/sd_probe.c
+grep -Fqx 'name: Build Full Throttle N64 r2s' "$WORKFLOW"
+grep -Fq 'name: full-throttle-n64-r2s-build-report' "$WORKFLOW"
+grep -Fq 'TARGET := full-throttle-n64-r2s' backend/Makefile.libdragon
+grep -Fq 'full-throttle-n64-r2s.z64' scripts/build_scummvm.sh
+grep -Fq 'ft64-sd-probe-r2s.z64' scripts/build_probe.sh
+grep -Fq 'FULL THROTTLE N64 - r2s' probe/sd_probe.c
 # Historical documentation may legitimately mention earlier revisions. Reject only
-# Active build/runtime identities must all be r2r. Historical docs may mention earlier releases.
-if grep -RInE --exclude=preflight.sh 'full-throttle-n64-r2(n|o|p|q)(\.z64|-build-report)|ft64-sd-probe-r2(n|o|p|q)|Build Full Throttle N64 r2(n|o|p|q)|FULL THROTTLE N64 - r2(n|o|p|q)' \
+# Active build/runtime identities must all be r2s. Historical docs may mention earlier releases.
+if grep -RInE --exclude=preflight.sh 'full-throttle-n64-r2(n|o|p|q|r)(\.z64|-build-report)|ft64-sd-probe-r2(n|o|p|q|r)|Build Full Throttle N64 r2(n|o|p|q|r)|FULL THROTTLE N64 - r2(n|o|p|q|r)' \
     .github scripts backend/Makefile.libdragon probe TERMUX.md; then
-    echo "stale active r2n/r2o/r2p/r2q project identity remains" >&2
+    echo "stale active r2n/r2o/r2p/r2q/r2r project identity remains" >&2
     exit 1
 fi
 
@@ -62,7 +63,7 @@ test ! -e scripts/fetch_demo.sh
 test ! -e scripts/stage_demo_sd.sh
 if grep -RInE 'ft-dos-demo|fetch_demo|stage_demo|demo-cache|artifacts/sdcard' \
     .github scripts/run_all.sh scripts/publish_termux.sh TERMUX.md .gitignore; then
-    echo "game/demo packaging machinery leaked into r2r" >&2
+    echo "game/demo packaging machinery leaked into r2s" >&2
     exit 1
 fi
 
@@ -76,6 +77,7 @@ echo "[preflight] one consolidated ScummVM patch"
 mapfile -t patch_paths < <(git apply --numstat "$PATCH" | awk '{print $3}' | sort)
 expected_paths=(
     engines/scumm/insane/insane.cpp
+    engines/scumm/resource.cpp
     engines/scumm/smush/smush_player.cpp
     engines/scumm/smush/smush_player.h
     gui/module.mk
@@ -86,10 +88,10 @@ if [ "${patch_paths[*]}" != "${expected_paths[*]}" ]; then
     printf 'expected: %s\n' "${expected_paths[*]}" >&2
     exit 1
 fi
-expected_patch_sha='01b2dda2caf28995090bf68158a7f0371ac6bebfb7e6a3991d08669bccec298d'
+expected_patch_sha='9a90e18017552355e2e75eb0a5615f469273892d316a4e84a51d1157dcfbc041'
 actual_patch_sha="$(sha256sum "$PATCH" | awk '{print $1}')"
 if [ "$actual_patch_sha" != "$expected_patch_sha" ]; then
-    echo "consolidated patch digest does not match validated r2r diagnostic patch" >&2
+    echo "consolidated patch digest does not match validated r2s heap diagnostic patch" >&2
     echo "actual:   $actual_patch_sha" >&2
     echo "expected: $expected_patch_sha" >&2
     exit 1
@@ -101,13 +103,16 @@ grep -Fq 'video speed override' "$PATCH"
 grep -Fq 'setCurVideoFlags' "$PATCH"
 grep -Fq '_smush_setupsan2' "$PATCH"
 grep -Fq 'subSize >= 0x308' "$PATCH"
-grep -Fq '[FT64DIAG r2r] SMUSH begin' "$PATCH"
-grep -Fq '[FT64DIAG r2r] SMUSH eof' "$PATCH"
-grep -Fq '[FT64DIAG r2r] SMUSH loop-exit' "$PATCH"
-grep -Fq '[FT64DIAG r2r] SMUSH released' "$PATCH"
+grep -Fq '[FT64DIAG r2s] SMUSH begin' "$PATCH"
+grep -Fq '[FT64DIAG r2s] SMUSH eof' "$PATCH"
+grep -Fq '[FT64DIAG r2s] SMUSH loop-exit' "$PATCH"
+grep -Fq '[FT64DIAG r2s] SMUSH released' "$PATCH"
+grep -Fq 'ft64_diag_resource_heap("request"' "$PATCH"
+grep -Fq 'ft64_diag_resource_heap("after-expire"' "$PATCH"
+grep -Fq 'size >= 65536' "$PATCH"
 grep -Fq 'predictivedialog.o' "$PATCH"
 if grep -Fq 'engines/scumm/insane/insane.h' "$PATCH" || grep -Fq 'engines/scumm/scumm.cpp' "$PATCH"; then
-    echo "r2r patch imported unnecessary later-source files" >&2
+    echo "r2s patch imported unnecessary later-source files" >&2
     exit 1
 fi
 
@@ -140,12 +145,17 @@ grep -Fq 'void OSystem_N64Libdragon::rebuildGame16()' backend/osys_n64_libdragon
 grep -Fq 'if (_game16Dirty)' backend/osys_n64_libdragon.cpp
 grep -Fq 'memcpy(drow + xoff, srow, _gameW * sizeof(uint16));' backend/osys_n64_libdragon.cpp
 
-echo "[preflight] sparse SummerCart runtime diagnostics"
-grep -Fq '[FT64DIAG r2r] BOOT backend starting' backend/osys_n64_libdragon.cpp
-grep -Fq '[FT64DIAG r2r] HB src=poll' backend/osys_n64_libdragon.cpp
-grep -Fq '[FT64DIAG r2r] OVL hide' backend/osys_n64_libdragon.cpp
-grep -Fq '[FT64DIAG r2r] FS MISS' backend/n64libdragon-fs.cpp
-grep -Fq '[FT64DIAG r2r] FS READ open' backend/n64libdragon-fs.cpp
+echo "[preflight] SummerCart runtime and heap diagnostics"
+grep -Fq '[FT64DIAG r2s] BOOT backend starting' backend/osys_n64_libdragon.cpp
+grep -Fq '[FT64DIAG r2s] HB src=poll' backend/osys_n64_libdragon.cpp
+grep -Fq 'void ft64_diag_resource_heap(' backend/osys_n64_libdragon.cpp
+grep -Fq '[FT64DIAG r2s] RES phase=' backend/osys_n64_libdragon.cpp
+grep -Fq 'sys_get_heap_stats(&stats);' backend/osys_n64_libdragon.cpp
+grep -Fq 'sys_get_heap_stats(&heap);' backend/osys_n64_libdragon.cpp
+grep -Fq 'heap=%d/%d free=%d' backend/osys_n64_libdragon.cpp
+grep -Fq '[FT64DIAG r2s] OVL hide' backend/osys_n64_libdragon.cpp
+grep -Fq '[FT64DIAG r2s] FS MISS' backend/n64libdragon-fs.cpp
+grep -Fq '[FT64DIAG r2s] FS READ open' backend/n64libdragon-fs.cpp
 grep -Fq 'kDiagFsMissLimit = 96' backend/n64libdragon-fs.cpp
 grep -Fq 'kDiagFsOpLimit = 192' backend/n64libdragon-fs.cpp
 grep -Fq 'sc64-termux-log/sc64-listen' scripts/record_sc64_log.sh
@@ -211,6 +221,8 @@ grep -Fq 'git -C "$SCUMMVM" apply --check "$PATCH"' scripts/integrate_backend.sh
 grep -Fq 'smush-header-before.txt' scripts/integrate_backend.sh
 grep -Fq 'smush-header-after.txt' scripts/integrate_backend.sh
 grep -Fq 'smush-runtime-diagnostic-markers.txt' scripts/integrate_backend.sh
+grep -Fq 'resource-heap-diagnostic-markers.txt' scripts/integrate_backend.sh
+grep -Fq 'resource-create-after.txt' scripts/integrate_backend.sh
 grep -Fq 'backend-runtime-diagnostic-markers.txt' scripts/integrate_backend.sh
 grep -Fq 'make -C "$DST" -pn' scripts/integrate_backend.sh
 grep -Fq 'gui/libgui.a' scripts/integrate_backend.sh

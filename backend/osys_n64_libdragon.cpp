@@ -30,6 +30,18 @@ static uint32 s_diagCopyCalls = 0;
 static uint32 s_diagFullBlits = 0;
 static uint32 s_diagPaletteCalls = 0;
 
+void ft64_diag_resource_heap(const char *phase, int type, unsigned int idx,
+                             unsigned int requestSize, unsigned int resourceAllocated,
+                             int minThreshold, int maxThreshold) {
+    heap_stats_t stats;
+    sys_get_heap_stats(&stats);
+    const int freeBytes = stats.total - stats.used;
+    debugf("[FT64DIAG r2s] RES phase=%s type=%d idx=%u req=%u resalloc=%u "
+           "min=%d max=%d heap=%d/%d free=%d\n",
+           phase ? phase : "?", type, idx, requestSize, resourceAllocated,
+           minThreshold, maxThreshold, stats.used, stats.total, freeBytes);
+}
+
 OSystem_N64Libdragon::OSystem_N64Libdragon()
     : _mixer(0), _game16(0), _overlay(0), _cursor(0), _cursorW(0), _cursorH(0),
       _cursorKey(0), _cursorHotX(0), _cursorHotY(0),
@@ -41,7 +53,7 @@ OSystem_N64Libdragon::OSystem_N64Libdragon()
 
     debug_init(DEBUG_FEATURE_LOG_USB | DEBUG_FEATURE_LOG_EMU);
     bool sd = debug_init_sdfs("sd:/", -1);
-    debugf("[FT64DIAG r2r] BOOT backend starting; sdfs=%d\n", sd ? 1 : 0);
+    debugf("[FT64DIAG r2s] BOOT backend starting; sdfs=%d\n", sd ? 1 : 0);
 
     display_init(RESOLUTION_320x240, DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE);
     joypad_init();
@@ -91,7 +103,7 @@ void OSystem_N64Libdragon::initBackend() {
 
     EventsBaseBackend::initBackend();
 
-    debugf("[FT64DIAG r2r] INIT complete audio=%dHz buffer=%d game=%dx%d\n",
+    debugf("[FT64DIAG r2s] INIT complete audio=%dHz buffer=%d game=%dx%d\n",
            audio_get_frequency(), audio_get_buffer_length(), _gameW, _gameH);
 }
 
@@ -142,7 +154,7 @@ void OSystem_N64Libdragon::initSize(uint width, uint height, const Graphics::Pix
 
     _gameW = (int)width;
     _gameH = (int)height;
-    debugf("[FT64DIAG r2r] VIDEO initSize %dx%d ms=%u\n",
+    debugf("[FT64DIAG r2s] VIDEO initSize %dx%d ms=%u\n",
            _gameW, _gameH, (unsigned)getMillis());
     _game.create(_gameW, _gameH, Graphics::PixelFormat::createFormatCLUT8());
     memset(_game.pixels, 0, _game.pitch * _game.h);
@@ -297,12 +309,15 @@ void OSystem_N64Libdragon::updateScreen() {
 
     const uint32 diagNow = getMillis();
     if (!s_diagLastHeartbeat || (uint32)(diagNow - s_diagLastHeartbeat) >= 1000) {
-        debugf("[FT64DIAG r2r] HB ms=%u game=%dx%d ovl=%d dirty=%d g16dirty=%d upd=%u poll=%u present=%u copy=%u full=%u pal=%u\n",
+        heap_stats_t heap;
+        sys_get_heap_stats(&heap);
+        debugf("[FT64DIAG r2s] HB ms=%u game=%dx%d ovl=%d dirty=%d g16dirty=%d upd=%u poll=%u present=%u copy=%u full=%u pal=%u heap=%d/%d free=%d\n",
                (unsigned)diagNow, _gameW, _gameH, _overlayVisible ? 1 : 0,
                _screenDirty ? 1 : 0, _game16Dirty ? 1 : 0,
                (unsigned)s_diagUpdateCalls, (unsigned)s_diagPollCalls,
                (unsigned)s_diagPresentCalls, (unsigned)s_diagCopyCalls,
-               (unsigned)s_diagFullBlits, (unsigned)s_diagPaletteCalls);
+               (unsigned)s_diagFullBlits, (unsigned)s_diagPaletteCalls,
+               heap.used, heap.total, heap.total - heap.used);
         s_diagLastHeartbeat = diagNow;
     }
 
@@ -374,7 +389,7 @@ void OSystem_N64Libdragon::setShakePos(int shakeOffset) {
 }
 
 void OSystem_N64Libdragon::showOverlay() {
-    debugf("[FT64DIAG r2r] OVL show ms=%u game=%dx%d\n",
+    debugf("[FT64DIAG r2s] OVL show ms=%u game=%dx%d\n",
            (unsigned)getMillis(), _gameW, _gameH);
     _overlayVisible = true;
     clampMouse();
@@ -384,7 +399,7 @@ void OSystem_N64Libdragon::showOverlay() {
 }
 
 void OSystem_N64Libdragon::hideOverlay() {
-    debugf("[FT64DIAG r2r] OVL hide ms=%u game=%dx%d\n",
+    debugf("[FT64DIAG r2s] OVL hide ms=%u game=%dx%d\n",
            (unsigned)getMillis(), _gameW, _gameH);
     _overlayVisible = false;
     clampMouse();
@@ -404,7 +419,7 @@ void OSystem_N64Libdragon::clearOverlay() {
      * overlay remains active. This backend uses fake alpha blending, so copy
      * the current game image into the overlay exactly as the historical N64
      * backend did instead of clearing the overlay to black. */
-    debugf("[FT64DIAG r2r] OVL clear ms=%u game=%dx%d g16dirty=%d\n",
+    debugf("[FT64DIAG r2s] OVL clear ms=%u game=%dx%d g16dirty=%d\n",
            (unsigned)getMillis(), _gameW, _gameH, _game16Dirty ? 1 : 0);
 
     if (_game16Dirty)
@@ -560,12 +575,15 @@ bool OSystem_N64Libdragon::pollEvent(Common::Event &event) {
     ++s_diagPollCalls;
     const uint32 now = getMillis();
     if (!s_diagLastHeartbeat || (uint32)(now - s_diagLastHeartbeat) >= 1000) {
-        debugf("[FT64DIAG r2r] HB src=poll ms=%u game=%dx%d ovl=%d dirty=%d g16dirty=%d upd=%u poll=%u present=%u copy=%u full=%u pal=%u\n",
+        heap_stats_t heap;
+        sys_get_heap_stats(&heap);
+        debugf("[FT64DIAG r2s] HB src=poll ms=%u game=%dx%d ovl=%d dirty=%d g16dirty=%d upd=%u poll=%u present=%u copy=%u full=%u pal=%u heap=%d/%d free=%d\n",
                (unsigned)now, _gameW, _gameH, _overlayVisible ? 1 : 0,
                _screenDirty ? 1 : 0, _game16Dirty ? 1 : 0,
                (unsigned)s_diagUpdateCalls, (unsigned)s_diagPollCalls,
                (unsigned)s_diagPresentCalls, (unsigned)s_diagCopyCalls,
-               (unsigned)s_diagFullBlits, (unsigned)s_diagPaletteCalls);
+               (unsigned)s_diagFullBlits, (unsigned)s_diagPaletteCalls,
+               heap.used, heap.total, heap.total - heap.used);
         s_diagLastHeartbeat = now;
     }
 
@@ -665,7 +683,7 @@ void OSystem_N64Libdragon::unlockMutex(MutexRef mutex) { (void)mutex; }
 void OSystem_N64Libdragon::deleteMutex(MutexRef mutex) { (void)mutex; }
 
 void OSystem_N64Libdragon::quit() {
-    debugf("[FT64DIAG r2r] QUIT requested ms=%u\n", (unsigned)getMillis());
+    debugf("[FT64DIAG r2s] QUIT requested ms=%u\n", (unsigned)getMillis());
 }
 
 Common::String OSystem_N64Libdragon::getDefaultConfigFileName() {

@@ -1,79 +1,42 @@
-# Full Throttle N64 r2r — retail transition diagnostics
+# Full Throttle N64 r2s — heap diagnostics
 
-r2r is a deliberately sparse diagnostic build based on the verified r2q
-ScummVM timing backport. Its immediate target is the retail-CD behavior observed
-on hardware: the opening SMUSH movie completes and the display then goes black.
+Full Throttle-only ScummVM 1.6.0 port for Nintendo 64/libdragon.
 
-No renderer optimization is being attempted in this revision. The point is to
-separate four cases with SummerCart USB evidence:
+## Why r2s exists
 
-1. SMUSH never exits cleanly.
-2. SMUSH exits but the SCUMM event/main loop stops advancing.
-3. The loop advances but no new screen presentation occurs.
-4. A retail resource/path lookup fails around the transition.
+The r2r SummerCart trace reached retail Full Throttle gameplay content and then
+terminated in `operator new` while `ResourceManager::createResource()` was
+loading an iMUSE sound resource. The file-open diagnostics showed no missing CD
+files around that crash.
 
-## Runtime markers
+r2s keeps all r2r SMUSH, filesystem, renderer, input, SD/save, and transition
+diagnostics and adds allocation telemetry at the exact resource allocator.
 
-The libdragon backend already sends debug output to USB and emulator logs.
-r2r adds a low-volume `[FT64DIAG r2r]` stream:
+## Runtime output
 
-- boot/backend initialization;
-- video `initSize`;
-- one heartbeat per second from rendering or `pollEvent`, including cumulative
-  update, poll, present, copy, full-frame, and palette counters;
-- overlay show/hide/clear transitions;
-- the first 96 missing paths under `sd:/fullthrottle/`;
-- the first 192 Full Throttle filesystem open/write operations;
-- SMUSH begin, EOF, loop exit, and post-release markers.
-
-The filesystem counters are capped and SMUSH logging is transition-only so USB
-traffic does not become a frame-by-frame performance perturbation.
-
-## Full retail data
-
-The executable remains data-agnostic between demo and retail and launches:
+Each heartbeat now includes libdragon heap usage and free bytes. Sound-resource
+and >=64 KiB resource allocations emit four snapshots:
 
 ```text
--p sd:/fullthrottle ft
+[FT64DIAG r2s] RES phase=request ...
+[FT64DIAG r2s] RES phase=after-nuke ...
+[FT64DIAG r2s] RES phase=after-expire ...
+[FT64DIAG r2s] RES phase=allocated ...
 ```
 
-No copyrighted Full Throttle data is downloaded, embedded, or packaged.
+Each line includes resource type/id, requested bytes, ScummVM resource-cache
+bytes, minimum/maximum cache thresholds, and real libdragon heap used/total/free.
+If `after-expire` is the final line before `operator new`, its numbers distinguish
+insufficient free memory from likely heap fragmentation.
 
-## Pinned source
+No retail/demo data is included or fetched. Game data remains on
+`sd:/fullthrottle/`.
 
-ScummVM:
-`f75a652bb7c956f145abe881c87b5dbf5c9ec24b`
-
-libdragon:
-`35f85a0797324a5ed0c723203e33ab3c1da94fdd`
-
-The one ScummVM patch still touches only:
+Build outputs:
 
 ```text
-engines/scumm/insane/insane.cpp
-engines/scumm/smush/smush_player.cpp
-engines/scumm/smush/smush_player.h
-gui/module.mk
+ft64-sd-probe-r2s.z64
+full-throttle-n64-r2s.z64
 ```
 
-Its SHA-256 is:
-
-```text
-01b2dda2caf28995090bf68158a7f0371ac6bebfb7e6a3991d08669bccec298d
-```
-
-The update bundle validates that patch against the exact pristine pinned files
-saved by the r2o CI artifact before it is allowed to touch GitHub.
-
-## Build output
-
-```text
-ft64-sd-probe-r2r.z64
-full-throttle-n64-r2r.z64
-```
-
-Artifact:
-
-```text
-full-throttle-n64-r2r-build-report
-```
+Artifact: `full-throttle-n64-r2s-build-report`.

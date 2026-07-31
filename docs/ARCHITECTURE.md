@@ -1,4 +1,4 @@
-# r2r architecture
+# r2s architecture
 
 ## Runtime data path
 
@@ -42,11 +42,11 @@ the patch is applied once.
 
 ## Input
 
-r2r retains the r2m libdragon Joypad/mouse path unchanged.
+r2s retains the r2m libdragon Joypad/mouse path unchanged.
 
 ## Audio/timers
 
-r2r does not change the established audio configuration or timer servicing.
+r2s does not change the established audio configuration or timer servicing.
 Audio remains 22050 Hz with three libdragon buffers. The ScummVM timer manager is
 serviced from normal backend execution rather than interrupt context.
 
@@ -58,9 +58,9 @@ ScummVM source mutation is `upstream/scummvm-1.6.0-ft64.patch`, applied once
 after an exact `git apply --check`. No fallback rewrite exists.
 
 
-## r2r diagnostic layer
+## r2s diagnostic layer
 
-r2r does not change the architecture of the renderer or filesystem. It adds
+r2s does not change the architecture of the renderer or filesystem. It adds
 observation points only: SMUSH lifecycle markers in the pinned engine patch,
 bounded filesystem logging, overlay markers, and a one-second backend heartbeat.
 The heartbeat is emitted from either updateScreen() or pollEvent(), whichever

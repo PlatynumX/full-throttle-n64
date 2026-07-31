@@ -18,7 +18,7 @@ if [ ! -x "$LISTENER" ]; then
     exit 1
 fi
 
-echo "Full Throttle N64 r2r SummerCart capture"
+echo "Full Throttle N64 r2s SummerCart capture"
 echo "Listener: $LISTENER"
 echo "Log:      $LOG"
 if [ "$#" -gt 0 ]; then
@@ -26,7 +26,7 @@ if [ "$#" -gt 0 ]; then
 else
     echo "USB arg:  auto/default"
 fi
-echo "Press Ctrl+C after the intro reaches the black screen and leave it there for 3-5 seconds."
+echo "Reproduce the crash or black screen, wait 3-5 seconds if the logger remains connected, then press Ctrl+C."
 echo
 
 set +e
