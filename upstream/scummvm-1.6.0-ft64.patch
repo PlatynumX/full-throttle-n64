@@ -97,7 +97,7 @@ index ce098f07aa2a9bb8c4e6a5f6bdb43021df4b3510..28e75a78cca38fdbfcb89938aff4a11e
  
  	if (_base->pos() >= (int32)_baseSize) {
 +		::ft64_diag_heap_marker("smush-eof");
-+		warning("[FT64DIAG r2u] SMUSH eof frame=%d pos=%d size=%d",
++		warning("[FT64DIAG r2v] SMUSH eof frame=%d pos=%d size=%d",
 +		        _frame, (int)_base->pos(), (int)_baseSize);
  		_vm->_smushVideoShouldFinish = true;
  		_endOfFile = true;
@@ -107,7 +107,7 @@ index ce098f07aa2a9bb8c4e6a5f6bdb43021df4b3510..28e75a78cca38fdbfcb89938aff4a11e
  
  void SmushPlayer::play(const char *filename, int32 speed, int32 offset, int32 startFrame) {
 +	::ft64_diag_heap_marker("smush-begin");
-+	warning("[FT64DIAG r2u] SMUSH begin file=%s speed=%d offset=%d start=%d", filename, speed, offset, startFrame);
++	warning("[FT64DIAG r2v] SMUSH begin file=%s speed=%d offset=%d start=%d", filename, speed, offset, startFrame);
 +
  	// Verify the specified file exists
  	ScummFile f;
@@ -116,14 +116,14 @@ index ce098f07aa2a9bb8c4e6a5f6bdb43021df4b3510..28e75a78cca38fdbfcb89938aff4a11e
  		_vm->_system->delayMillis(10);
  	}
  
-+	warning("[FT64DIAG r2u] SMUSH loop-exit file=%s frame=%d total=%d eof=%d finish=%d save=%d quit=%d",
++	warning("[FT64DIAG r2v] SMUSH loop-exit file=%s frame=%d total=%d eof=%d finish=%d save=%d quit=%d",
 +	        filename, _frame, _nbframes, _endOfFile ? 1 : 0,
 +	        _vm->_smushVideoShouldFinish ? 1 : 0, _vm->_saveLoadFlag,
 +	        _vm->shouldQuit() ? 1 : 0);
 +	::ft64_diag_heap_marker("smush-before-release");
  	release();
 +	::ft64_diag_heap_marker("smush-after-release");
-+	warning("[FT64DIAG r2u] SMUSH released file=%s active=%d fullRedraw=%d",
++	warning("[FT64DIAG r2v] SMUSH released file=%s active=%d fullRedraw=%d",
 +	        filename, _vm->_smushActive ? 1 : 0, _vm->_fullRedraw ? 1 : 0);
  
  	// Reset mouse state

@@ -1,4 +1,4 @@
-# Full Throttle N64 r2u
+# Full Throttle N64 r2v
 # ScummVM 1.6.0 + libdragon backend.
 
 srcdir := ../../..
@@ -52,6 +52,9 @@ DEFINES += -DDISABLE_FANCY_THEMES
 DEFINES += -DDISABLE_DOSBOX_OPL
 DEFINES += -DDISABLE_TEXT_CONSOLE
 DEFINES += -DN64_EXTREME_MEMORY_SAVING
+DEFINES += -DN64_FT_ONLY
+DEFINES += -DDISABLE_HELP
+DEFINES += -DDISABLE_TOWNS_DUAL_LAYER_MODE
 
 # ScummVM 1.6.0 engine sources include headers as e.g. "scumm/scumm.h".
 # Its historical N64 Makefile therefore exposed both the source root and
@@ -70,7 +73,7 @@ OBJS := \
 
 include $(srcdir)/Makefile.common
 
-TARGET := full-throttle-n64-r2u
+TARGET := full-throttle-n64-r2v
 
 all: $(TARGET).z64
 

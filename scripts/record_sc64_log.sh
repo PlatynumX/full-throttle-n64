@@ -18,7 +18,7 @@ if [ ! -x "$LISTENER" ]; then
     exit 1
 fi
 
-echo "Full Throttle N64 r2u SummerCart capture"
+echo "Full Throttle N64 r2v SummerCart capture"
 echo "Listener: $LISTENER"
 echo "Log:      $LOG"
 if [ "$#" -gt 0 ]; then

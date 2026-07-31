@@ -104,7 +104,7 @@ void N64LibdragonFilesystemNode::setFlags() {
     dir_t entry;
     if (!findEntryInDirectory(parent, name, entry)) {
         if (_path.hasPrefix("sd:/fullthrottle/") && s_diagFsMisses < kDiagFsMissLimit) {
-            debugf("[FT64DIAG r2u] FS MISS %s\n", _path.c_str());
+            debugf("[FT64DIAG r2v] FS MISS %s\n", _path.c_str());
             ++s_diagFsMisses;
         }
         _isValid = false;
@@ -209,14 +209,14 @@ Common::SeekableReadStream *N64LibdragonFilesystemNode::createReadStream() {
     if (diag) ++s_diagFsOps;
     if (!_isValid || _isDirectory) {
         if (diag)
-            debugf("[FT64DIAG r2u] FS READ deny valid=%d dir=%d path=%s\n",
+            debugf("[FT64DIAG r2v] FS READ deny valid=%d dir=%d path=%s\n",
                    _isValid ? 1 : 0, _isDirectory ? 1 : 0, _path.c_str());
         return 0;
     }
-    if (diag) debugf("[FT64DIAG r2u] FS READ open %s\n", _path.c_str());
+    if (diag) debugf("[FT64DIAG r2v] FS READ open %s\n", _path.c_str());
     Common::SeekableReadStream *stream = StdioStream::makeFromPath(_path, false);
     if (diag)
-        debugf("[FT64DIAG r2u] FS READ result=%d path=%s\n",
+        debugf("[FT64DIAG r2v] FS READ result=%d path=%s\n",
                stream ? 1 : 0, _path.c_str());
     return stream;
 }
@@ -225,13 +225,13 @@ Common::WriteStream *N64LibdragonFilesystemNode::createWriteStream() {
     const bool diag = _path.hasPrefix("sd:/fullthrottle") && s_diagFsOps < kDiagFsOpLimit;
     if (diag) ++s_diagFsOps;
     if (_isDirectory) {
-        if (diag) debugf("[FT64DIAG r2u] FS WRITE deny-dir %s\n", _path.c_str());
+        if (diag) debugf("[FT64DIAG r2v] FS WRITE deny-dir %s\n", _path.c_str());
         return 0;
     }
-    if (diag) debugf("[FT64DIAG r2u] FS WRITE open %s\n", _path.c_str());
+    if (diag) debugf("[FT64DIAG r2v] FS WRITE open %s\n", _path.c_str());
     Common::WriteStream *stream = StdioStream::makeFromPath(_path, true);
     if (diag)
-        debugf("[FT64DIAG r2u] FS WRITE result=%d path=%s\n",
+        debugf("[FT64DIAG r2v] FS WRITE result=%d path=%s\n",
                stream ? 1 : 0, _path.c_str());
     return stream;
 }

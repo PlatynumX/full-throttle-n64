@@ -1,60 +1,36 @@
-# Full Throttle N64 r2u — memory map diagnostics
+# Full Throttle N64 r2v — Full Throttle-only static pruning
 
-r2u measures where the Expansion Pak memory is going before changing runtime
-behavior.
+r2v keeps the proven r2u memory diagnostics while removing compile-time roots for game engines and support systems that Full Throttle cannot use.
 
-## Runtime evidence
+## Source specialization
 
-SummerCart USB logs now include:
+`N64_FT_ONLY` makes the pinned ScummVM build instantiate only SCUMM v7 Full Throttle, the standard GDI, standard Sound manager, classic charset renderer, AKOS costumes, normal actors, and iMUSE Digital. It compiles out the old MIDI/player selection tree, Scumm debugger instance, launcher, event recorder, generic music-plugin manager, and YUV manager roots.
 
-```text
-[FT64DIAG r2u] MEM tag=... physical=... outside=... heap=used/total free=...
-[FT64DIAG r2u] NEW seq=... size=... caller=... heap=used/total free=...
-```
+`DISABLE_HELP` and `DISABLE_TOWNS_DUAL_LAYER_MODE` remove two more irrelevant paths. The library object lists remain intact for compile safety; `--gc-sections` removes archive members once these runtime roots are gone.
 
-Heap checkpoints cover display initialization, input/timer, audio, the CLUT8
-game surface, the converted 16-bit game surface, overlay allocation, filesystem
-factory, save manager, timer manager, mixer, event backend, game-surface resize,
-first update, first input poll, and SMUSH begin/end/release.
+## Backend memory
 
-The allocator threshold is 16 KiB. Each logged allocation includes the return
-address of the code that requested it. Failed allocations are always logged.
+The libdragon display queue changes from three 320x240x16 buffers to two, recovering about 150 KiB of heap. The converted game surface and overlay remain unchanged to avoid regressing the established transition path.
 
-## Build-time evidence
+## Evidence
 
-The build report preserves the exact ELF plus:
+The build artifact preserves the ELF, link map, address/size symbol tables, a static-size comparison against r2u (3,836,317 bytes), and a pruned-symbol audit. Runtime USB diagnostics remain enabled so the music allocation can be retested directly.
 
-```text
-r2u-elf-size.txt
-r2u-elf-sections.txt
-r2u-elf-readelf-sections.txt
-r2u-elf-readelf-segments.txt
-r2u-elf-objdump-sections.txt
-r2u-elf-symbols-by-address.txt
-r2u-elf-symbols-by-size.txt
-r2u-largest-400-symbols.txt
-r2u-static-memory-summary.txt
-```
+Outputs: `ft64-sd-probe-r2v.z64`, `full-throttle-n64-r2v.z64`.
 
-The address-ordered symbol file lets the runtime `caller=` addresses be mapped
-back to exact functions.
 
-## Scope
+## Reproducible source application
 
-This is diagnostic only. It keeps the r2t renderer, audio, input, SD/save,
-SMUSH timing, overlay transition, and allocation-failure behavior unchanged.
+The three large pinned source files are not carried as context-sensitive diffs.
+`scripts/specialize_ft_only.py` performs exact literal one-match edits and fails
+if the pinned source differs in any targeted block. The smaller established
+INSANE/SMUSH/GUI changes remain an ordinary exact four-file patch. The updater
+and CI both run the same two-stage source application and `git diff --check`.
 
-The main ROM still expects an Expansion Pak and game data at:
 
-```text
-sd:/fullthrottle/
-```
+## Structural Full Throttle specialization
 
-Outputs:
-
-```text
-ft64-sd-probe-r2u.z64
-full-throttle-n64-r2u.z64
-```
-
-Artifact: `full-throttle-n64-r2u-build-report`.
+`scripts/specialize_ft_only.py` uses unique normalized line anchors, balanced
+brace scanning, and preprocessor nesting rather than multiline source-string
+replacement. The updater and CI run separate check, apply, and verify phases.
+No source file is written until all three in-memory transformations validate.
