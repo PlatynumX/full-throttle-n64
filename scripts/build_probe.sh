@@ -6,5 +6,5 @@ mkdir -p "$ART"
 
 make -C "$ROOT/probe" clean
 make -C "$ROOT/probe" V=1 2>&1 | tee "$ART/probe-build.log"
-cp "$ROOT/probe/ft64-sd-probe-r2t.z64" "$ART/ft64-sd-probe-r2t.z64"
-sha256sum "$ART/ft64-sd-probe-r2t.z64" > "$ART/ft64-sd-probe-r2t.sha256"
+cp "$ROOT/probe/ft64-sd-probe-r2u.z64" "$ART/ft64-sd-probe-r2u.z64"
+sha256sum "$ART/ft64-sd-probe-r2u.z64" > "$ART/ft64-sd-probe-r2u.sha256"

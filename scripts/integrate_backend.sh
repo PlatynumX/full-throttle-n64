@@ -47,12 +47,12 @@ grep -Fq 'int16 _smush_setupsan2;' "$SCUMMVM/engines/scumm/insane/insane.h"
 grep -Fq '/* _version = */ b.readUint16LE();' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
 grep -Fq 'bool _skipPalette;' "$SCUMMVM/engines/scumm/smush/smush_player.h"
 
-# r2t keeps the verified timing and SMUSH-exit diagnostics in one four-file
+# r2u keeps the verified timing and SMUSH-exit diagnostics in one four-file
 # ScummVM patch. Heap diagnostics live at the backend allocation boundary,
 # with no regex rewrite, sed mutation, secondary patch, or fuzzy fallback.
-echo "[integrate] checking consolidated r2t timing+diagnostic patch against pinned ScummVM"
+echo "[integrate] checking consolidated r2u timing+diagnostic patch against pinned ScummVM"
 git -C "$SCUMMVM" apply --check "$PATCH"
-echo "[integrate] applying consolidated r2t timing+diagnostic patch once"
+echo "[integrate] applying consolidated r2u timing+diagnostic patch once"
 git -C "$SCUMMVM" apply "$PATCH"
 
 # Verify source-level results, not merely a zero exit code.
@@ -66,17 +66,21 @@ grep -Fq '_curVideoFlags = 0;' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
 grep -Fq 'headerMajorVersion > 1 && subSize >= 0x308' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
 grep -Fq 'video speed override' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
 grep -Fq 'b.skip(0x300);' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
-grep -Fq '[FT64DIAG r2t] SMUSH begin' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
-grep -Fq '[FT64DIAG r2t] SMUSH eof' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
-grep -Fq '[FT64DIAG r2t] SMUSH loop-exit' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
-grep -Fq '[FT64DIAG r2t] SMUSH released' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
+grep -Fq '[FT64DIAG r2u] SMUSH begin' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
+grep -Fq '[FT64DIAG r2u] SMUSH eof' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
+grep -Fq '[FT64DIAG r2u] SMUSH loop-exit' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
+grep -Fq '[FT64DIAG r2u] SMUSH released' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
+grep -Fq 'extern void ft64_diag_heap_marker(const char *tag);' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
+grep -Fq '::ft64_diag_heap_marker("smush-begin");' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
+grep -Fq '::ft64_diag_heap_marker("smush-before-release");' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
+grep -Fq '::ft64_diag_heap_marker("smush-after-release");' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"
 [ "$(grep -Fc '_player->setCurVideoFlags(_smush_setupsan2);' "$SCUMMVM/engines/scumm/insane/insane.cpp")" -eq 3 ]
 # Keep the established 1.6.0 INSANE field rather than importing the later
 # source-layout rename from 2023.
 grep -Fq 'int16 _smush_setupsan2;' "$SCUMMVM/engines/scumm/insane/insane.h"
 # The N64 adaptation deliberately does not allocate the whole AHDR chunk.
 if grep -Fq 'byte *headerContent = (byte *)malloc(subSize' "$SCUMMVM/engines/scumm/smush/smush_player.cpp"; then
-    echo "unexpected whole-AHDR allocation in r2t SMUSH backport" >&2
+    echo "unexpected whole-AHDR allocation in r2u SMUSH backport" >&2
     exit 1
 fi
 
@@ -89,7 +93,7 @@ for rel in \
     cp "$SCUMMVM/$rel" "$ART/patched-source/$rel"
 done
 sed -n '205,255p;895,970p;1010,1055p;1150,1295p' "$SCUMMVM/engines/scumm/smush/smush_player.cpp" > "$ART/smush-player-after.txt"
-grep -n 'FT64DIAG r2t' "$SCUMMVM/engines/scumm/smush/smush_player.cpp" > "$ART/smush-runtime-diagnostic-markers.txt"
+grep -n 'FT64DIAG r2u' "$SCUMMVM/engines/scumm/smush/smush_player.cpp" > "$ART/smush-runtime-diagnostic-markers.txt"
 sed -n '30,120p' "$SCUMMVM/engines/scumm/smush/smush_player.h" > "$ART/smush-header-after.txt"
 sed -n '850,885p;1398,1470p' "$SCUMMVM/engines/scumm/insane/insane.cpp" > "$ART/insane-after.txt"
 
@@ -104,14 +108,20 @@ cp "$SRC/n64libdragon-fs.cpp" "$DST/"
 cp "$SRC/Makefile.libdragon" "$DST/Makefile"
 
 # Preserve and prove the sparse runtime diagnostics that will be exercised on hardware.
-cp "$DST/osys_n64_libdragon.cpp" "$ART/backend-osys-r2t.cpp"
-cp "$DST/n64libdragon-fs.cpp" "$ART/backend-fs-r2t.cpp"
-grep -n 'FT64DIAG r2t' "$DST/osys_n64_libdragon.cpp" "$DST/n64libdragon-fs.cpp"     > "$ART/backend-runtime-diagnostic-markers.txt"
-grep -Fq '[FT64DIAG r2t] HB src=poll' "$DST/osys_n64_libdragon.cpp"
-grep -Fq '[FT64DIAG r2t] NEW phase=%s kind=%s size=%u result=%p' "$DST/osys_n64_libdragon.cpp"
+cp "$DST/osys_n64_libdragon.cpp" "$ART/backend-osys-r2u.cpp"
+cp "$DST/n64libdragon-fs.cpp" "$ART/backend-fs-r2u.cpp"
+grep -n 'FT64DIAG r2u' "$DST/osys_n64_libdragon.cpp" "$DST/n64libdragon-fs.cpp"     > "$ART/backend-runtime-diagnostic-markers.txt"
+grep -Fq '[FT64DIAG r2u] HB src=poll' "$DST/osys_n64_libdragon.cpp"
+grep -Fq '[FT64DIAG r2u] NEW seq=%u phase=%s kind=%s size=%u' "$DST/osys_n64_libdragon.cpp"
+grep -Fq 'caller=%p heap=%d/%d free=%d' "$DST/osys_n64_libdragon.cpp"
+grep -Fq 'static const size_t kFt64DiagLargeAllocation = 16384;' "$DST/osys_n64_libdragon.cpp"
+grep -Fq 'void ft64_diag_heap_marker(const char *tag)' "$DST/osys_n64_libdragon.cpp"
+grep -Fq 'ft64_diag_heap_marker("ctor-display");' "$DST/osys_n64_libdragon.cpp"
+grep -Fq 'ft64_diag_heap_marker("initBackend-mixer");' "$DST/osys_n64_libdragon.cpp"
+grep -Fq '__builtin_return_address(0)' "$DST/osys_n64_libdragon.cpp"
 grep -Fq 'void *operator new[](size_t size)' "$DST/osys_n64_libdragon.cpp"
 grep -Fq 'ft64_allocate_or_abort' "$DST/osys_n64_libdragon.cpp"
-grep -Fq 'ft64_diag_new("failed", kind, size, 0, true);' "$DST/osys_n64_libdragon.cpp"
+grep -Fq 'ft64_diag_new(sequence, "failed", kind, size, 0, caller, true);' "$DST/osys_n64_libdragon.cpp"
 grep -Fq 'abort();' "$DST/osys_n64_libdragon.cpp"
 if grep -Fq 'throw ' "$DST/osys_n64_libdragon.cpp"; then
     echo "allocator diagnostics use exceptions despite -fno-exceptions" >&2
@@ -122,8 +132,8 @@ if grep -Fq 'ft64_diag_resource_heap' "$DST/osys_n64_libdragon.cpp"; then
     echo "obsolete resource.cpp telemetry bridge remains" >&2
     exit 1
 fi
-grep -Fq '[FT64DIAG r2t] FS MISS' "$DST/n64libdragon-fs.cpp"
-grep -Fq '[FT64DIAG r2t] FS READ open' "$DST/n64libdragon-fs.cpp"
+grep -Fq '[FT64DIAG r2u] FS MISS' "$DST/n64libdragon-fs.cpp"
+grep -Fq '[FT64DIAG r2u] FS READ open' "$DST/n64libdragon-fs.cpp"
 
 # Full Throttle / SCUMM v7-v8 evidence gates.
 grep -q 'ifdef ENABLE_SCUMM_7_8' "$SCUMMVM/engines/scumm/module.mk"
@@ -169,5 +179,5 @@ done
 
 git -C "$SCUMMVM" add -N backends/platform/n64libdragon
 git -C "$SCUMMVM" diff --check
-git -C "$SCUMMVM" diff > "$ART/r2t-source-delta.patch"
+git -C "$SCUMMVM" diff > "$ART/r2u-source-delta.patch"
 git -C "$SCUMMVM" status --short > "$ART/scummvm-status-after-integration.txt"

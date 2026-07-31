@@ -1,49 +1,50 @@
-# Full Throttle N64 r2t — allocator diagnostics
+# Full Throttle N64 r2u — memory map diagnostics
 
-This is the corrected r2t diagnostic build for the retail Full Throttle
-allocation crash.
+r2u measures where the Expansion Pak memory is going before changing runtime
+behavior.
 
-## What r2s proved
+## Runtime evidence
 
-The r2s CI run stopped before compilation because its `resource.cpp` diagnostic
-hunk did not apply to the real pinned ScummVM source. That patch is discarded.
-
-## r2t design
-
-The one ScummVM patch is back to the four exact files already validated by the
-r2q/r2r integration work:
+SummerCart USB logs now include:
 
 ```text
-engines/scumm/insane/insane.cpp
-engines/scumm/smush/smush_player.cpp
-engines/scumm/smush/smush_player.h
-gui/module.mk
+[FT64DIAG r2u] MEM tag=... physical=... outside=... heap=used/total free=...
+[FT64DIAG r2u] NEW seq=... size=... caller=... heap=used/total free=...
 ```
 
-`resource.cpp` is untouched.
+Heap checkpoints cover display initialization, input/timer, audio, the CLUT8
+game surface, the converted 16-bit game surface, overlay allocation, filesystem
+factory, save manager, timer manager, mixer, event backend, game-surface resize,
+first update, first input poll, and SMUSH begin/end/release.
 
-Heap telemetry is instead placed at the N64 backend's global `operator new` and
-`operator new[]` boundary—the allocation path reached by the crash trace.
+The allocator threshold is 16 KiB. Each logged allocation includes the return
+address of the code that requested it. Failed allocations are always logged.
 
-Large allocations and every failed allocation report:
+## Build-time evidence
+
+The build report preserves the exact ELF plus:
 
 ```text
-[FT64DIAG r2t] NEW phase=request kind=array size=...
-[FT64DIAG r2t] NEW phase=allocated kind=array size=...
-[FT64DIAG r2t] NEW phase=failed kind=array size=...
+r2u-elf-size.txt
+r2u-elf-sections.txt
+r2u-elf-readelf-sections.txt
+r2u-elf-readelf-segments.txt
+r2u-elf-objdump-sections.txt
+r2u-elf-symbols-by-address.txt
+r2u-elf-symbols-by-size.txt
+r2u-largest-400-symbols.txt
+r2u-static-memory-summary.txt
 ```
 
-Each line includes requested bytes and libdragon heap used, total, and free
-bytes. Logging is enabled only after USB debug initialization and guarded
-against recursive diagnostic allocation.
+The address-ordered symbol file lets the runtime `caller=` addresses be mapped
+back to exact functions.
 
-The backend is compiled with `-fno-exceptions`, so allocation failure is logged
-and then stopped with `abort()` rather than using a C++ throw.
+## Scope
 
-Existing r2r/r2s filesystem, SMUSH lifecycle, screen heartbeat, overlay,
-controller, SD, and save diagnostics remain.
+This is diagnostic only. It keeps the r2t renderer, audio, input, SD/save,
+SMUSH timing, overlay transition, and allocation-failure behavior unchanged.
 
-No game data is included or fetched. Runtime data remains at:
+The main ROM still expects an Expansion Pak and game data at:
 
 ```text
 sd:/fullthrottle/
@@ -52,8 +53,8 @@ sd:/fullthrottle/
 Outputs:
 
 ```text
-ft64-sd-probe-r2t.z64
-full-throttle-n64-r2t.z64
+ft64-sd-probe-r2u.z64
+full-throttle-n64-r2u.z64
 ```
 
-Artifact: `full-throttle-n64-r2t-build-report`.
+Artifact: `full-throttle-n64-r2u-build-report`.

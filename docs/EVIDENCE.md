@@ -1,64 +1,58 @@
-# Evidence / design notes — r2t corrected package
+# Evidence / design notes — r2u
 
-## Corrected validation baseline
+## Exact r2t baseline
 
-The first r2t ZIP contained r2r backend fixture files while its fixture manifest
-listed the reconstructed r2s hashes. Its checksum gate correctly refused to
-continue before cloning or modifying GitHub.
-
-This package reconstructs and includes the actual r2s backend:
+The updater requires these exact live backend files before it changes anything:
 
 ```text
 backend/osys_n64_libdragon.cpp
-0fa15967558b1ab423b0e05e5fe2686e7fbd46c48449def1ea5fd7d7291dfbef
+9a9bd01d9ad65f7251ac6f449407791b0650e5a3025af174efc29f0da878e323
 
 backend/n64libdragon-fs.cpp
-a5b171e75ea987e242a053c9390c88772b9a7d4c07c646d9b9d25a6f18173f34
+4db29d02596a5efa7be4c1c941a16a0121abd1d7129dee8cd254fb37752572b1
 ```
 
-The backend diagnostic patch is generated only after committing that exact r2s
-baseline.
-
-## ScummVM patch
-
-The consolidated ScummVM patch touches exactly four files and does not touch
-`resource.cpp`.
-
-SHA-256:
+The exact r2t ScummVM patch SHA-256 is:
 
 ```text
 e1af9d2c0a4f8e6a0c745817ba931e214e53e5ebd7091118a831838c70fd35bf
 ```
 
-## Backend allocator patch
+## r2u patches
 
-The allocator patch transforms exact r2s into r2t.
-
-SHA-256:
+The backend memory-map patch SHA-256 is:
 
 ```text
-b069c1335f521258d73b8d46dc40d15201a9d75ce7764017248535cad0ec35f2
+3672c1e3a305ba86c83cbf0980efad26ac6077be04df78362f53e9fed215c997
 ```
 
-It instruments normal object and array allocation, reports allocations of at
-least 64 KiB plus every failed allocation, and reads libdragon heap statistics
-at the allocation boundary.
-
-Because the N64 backend is compiled with `-fno-exceptions`, the diagnostic
-failure path does not use `throw`; it logs the failure and calls `abort()`.
-
-## Validation policy
-
-Both patches are independently tested with:
+The consolidated pristine-source-to-r2u ScummVM patch SHA-256 is:
 
 ```text
-git apply --check
-git apply
-git diff --check
+4d4735eae951e7c1668825f8a7a073b82b2483f004c26b1c9fc722f60a66f194
 ```
 
-The package also verifies the exact post-patch backend hashes, shell syntax,
-internal checksums, staged-path policy, and ZIP integrity.
+The ScummVM patch still touches exactly:
 
-No fuzzy application, `--3way`, rebase, regex source mutation, or fallback
-patching is used.
+```text
+engines/scumm/insane/insane.cpp
+engines/scumm/smush/smush_player.cpp
+engines/scumm/smush/smush_player.h
+gui/module.mk
+```
+
+`resource.cpp` remains untouched.
+
+## Memory accounting
+
+`MEM` checkpoints report physical RAM, the fixed malloc-heap capacity, heap
+used/free, and bytes outside the malloc heap. Deltas between adjacent tags
+isolate libdragon display/audio reservations and backend surface allocations.
+
+`NEW` entries report allocations of 16 KiB or larger, allocation sequence,
+object/array form, request/result, requesting return address, and heap state.
+The build report includes the exact ELF and address-sorted symbols needed to
+resolve those caller addresses.
+
+No optimization is mixed into this revision. No fuzzy patching, `--3way`,
+source regex mutation, or fallback patch is used.

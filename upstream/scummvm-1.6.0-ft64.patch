@@ -27,10 +27,19 @@ index 44528e5baca12fccf714e5af13643bcebbb31359..2417396c1a434fe622e5293dc6cf4be6
  	_smush_isSanFileSetup = 1;
  	smush_setFrameSteps(step1, step2);
 diff --git a/engines/scumm/smush/smush_player.cpp b/engines/scumm/smush/smush_player.cpp
-index ce098f07aa2a9bb8c4e6a5f6bdb43021df4b3510..035b919356bdb640a3d03bc8b3c8bdf392dbb1b2 100644
+index ce098f07aa2a9bb8c4e6a5f6bdb43021df4b3510..28e75a78cca38fdbfcb89938aff4a11e242f37c8 100644
 --- a/engines/scumm/smush/smush_player.cpp
 +++ b/engines/scumm/smush/smush_player.cpp
-@@ -236,6 +236,7 @@ SmushPlayer::SmushPlayer(ScummEngine_v7 *scumm) {
+@@ -54,6 +54,8 @@
+ 
+ #include "common/zlib.h"
+ 
++extern void ft64_diag_heap_marker(const char *tag);
++
+ namespace Scumm {
+ 
+ static const int MAX_STRINGS = 200;
+@@ -236,6 +238,7 @@ SmushPlayer::SmushPlayer(ScummEngine_v7 *scumm) {
  	_insanity = false;
  	_middleAudio = false;
  	_skipPalette = false;
@@ -38,7 +47,7 @@ index ce098f07aa2a9bb8c4e6a5f6bdb43021df4b3510..035b919356bdb640a3d03bc8b3c8bdf3
  	_IACTstream = NULL;
  	_smixer = _vm->_smixer;
  	_paused = false;
-@@ -907,15 +908,28 @@ void SmushPlayer::handleAnimHeader(int32 subSize, Common::SeekableReadStream &b)
+@@ -907,15 +910,28 @@ void SmushPlayer::handleAnimHeader(int32 subSize, Common::SeekableReadStream &b)
  	debugC(DEBUG_SMUSH, "SmushPlayer::handleAnimHeader()");
  	assert(subSize >= 0x300 + 6);
  
@@ -72,7 +81,7 @@ index ce098f07aa2a9bb8c4e6a5f6bdb43021df4b3510..035b919356bdb640a3d03bc8b3c8bdf3
  }
  
  void SmushPlayer::setupAnim(const char *file) {
-@@ -926,6 +940,10 @@ void SmushPlayer::setupAnim(const char *file) {
+@@ -926,6 +942,10 @@ void SmushPlayer::setupAnim(const char *file) {
  		readString(file);
  }
  
@@ -83,34 +92,38 @@ index ce098f07aa2a9bb8c4e6a5f6bdb43021df4b3510..035b919356bdb640a3d03bc8b3c8bdf3
  SmushFont *SmushPlayer::getFont(int font) {
  	char file_font[11];
  
-@@ -1019,6 +1037,8 @@ void SmushPlayer::parseNextFrame() {
+@@ -1019,6 +1039,9 @@ void SmushPlayer::parseNextFrame() {
  	const int32 subOffset = _base->pos();
  
  	if (_base->pos() >= (int32)_baseSize) {
-+		warning("[FT64DIAG r2t] SMUSH eof frame=%d pos=%d size=%d",
++		::ft64_diag_heap_marker("smush-eof");
++		warning("[FT64DIAG r2u] SMUSH eof frame=%d pos=%d size=%d",
 +		        _frame, (int)_base->pos(), (int)_baseSize);
  		_vm->_smushVideoShouldFinish = true;
  		_endOfFile = true;
  		return;
-@@ -1141,6 +1161,8 @@ void SmushPlayer::unpause() {
+@@ -1141,6 +1164,9 @@ void SmushPlayer::unpause() {
  }
  
  void SmushPlayer::play(const char *filename, int32 speed, int32 offset, int32 startFrame) {
-+	warning("[FT64DIAG r2t] SMUSH begin file=%s speed=%d offset=%d start=%d", filename, speed, offset, startFrame);
++	::ft64_diag_heap_marker("smush-begin");
++	warning("[FT64DIAG r2u] SMUSH begin file=%s speed=%d offset=%d start=%d", filename, speed, offset, startFrame);
 +
  	// Verify the specified file exists
  	ScummFile f;
  	_vm->openFile(f, filename);
-@@ -1252,7 +1274,13 @@ void SmushPlayer::play(const char *filename, int32 speed, int32 offset, int32 st
+@@ -1252,7 +1278,15 @@ void SmushPlayer::play(const char *filename, int32 speed, int32 offset, int32 st
  		_vm->_system->delayMillis(10);
  	}
  
-+	warning("[FT64DIAG r2t] SMUSH loop-exit file=%s frame=%d total=%d eof=%d finish=%d save=%d quit=%d",
++	warning("[FT64DIAG r2u] SMUSH loop-exit file=%s frame=%d total=%d eof=%d finish=%d save=%d quit=%d",
 +	        filename, _frame, _nbframes, _endOfFile ? 1 : 0,
 +	        _vm->_smushVideoShouldFinish ? 1 : 0, _vm->_saveLoadFlag,
 +	        _vm->shouldQuit() ? 1 : 0);
++	::ft64_diag_heap_marker("smush-before-release");
  	release();
-+	warning("[FT64DIAG r2t] SMUSH released file=%s active=%d fullRedraw=%d",
++	::ft64_diag_heap_marker("smush-after-release");
++	warning("[FT64DIAG r2u] SMUSH released file=%s active=%d fullRedraw=%d",
 +	        filename, _vm->_smushActive ? 1 : 0, _vm->_fullRedraw ? 1 : 0);
  
  	// Reset mouse state

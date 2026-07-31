@@ -30,12 +30,35 @@ static uint32 s_diagCopyCalls = 0;
 static uint32 s_diagFullBlits = 0;
 static uint32 s_diagPaletteCalls = 0;
 
-static const size_t kFt64DiagLargeAllocation = 65536;
+static const size_t kFt64DiagLargeAllocation = 16384;
 static bool s_ft64AllocatorDiagReady = false;
 static bool s_ft64AllocatorDiagBusy = false;
+static uint32 s_ft64AllocatorSequence = 0;
+static bool s_ft64FirstUpdateLogged = false;
+static bool s_ft64FirstPollLogged = false;
 
-static void ft64_diag_new(const char *phase, const char *kind, size_t size,
-                          void *result, bool forceLog) {
+void ft64_diag_heap_marker(const char *tag) {
+    if (!s_ft64AllocatorDiagReady || s_ft64AllocatorDiagBusy)
+        return;
+
+    s_ft64AllocatorDiagBusy = true;
+    heap_stats_t heap;
+    sys_get_heap_stats(&heap);
+    const uint32 physical = (uint32)get_memory_size();
+    const uint32 outsideHeap =
+        physical > (uint32)heap.total ? physical - (uint32)heap.total : 0;
+    debugf("[FT64DIAG r2u] MEM tag=%s ms=%u expanded=%d physical=%u "
+           "outside=%u heap=%d/%d free=%d\n",
+           tag ? tag : "?", (unsigned)get_ticks_ms(),
+           is_memory_expanded() ? 1 : 0, (unsigned)physical,
+           (unsigned)outsideHeap, heap.used, heap.total,
+           heap.total - heap.used);
+    s_ft64AllocatorDiagBusy = false;
+}
+
+static void ft64_diag_new(uint32 sequence, const char *phase, const char *kind,
+                          size_t size, void *result, void *caller,
+                          bool forceLog) {
     if (!s_ft64AllocatorDiagReady || s_ft64AllocatorDiagBusy)
         return;
     if (!forceLog && size < kFt64DiagLargeAllocation)
@@ -44,34 +67,37 @@ static void ft64_diag_new(const char *phase, const char *kind, size_t size,
     s_ft64AllocatorDiagBusy = true;
     heap_stats_t heap;
     sys_get_heap_stats(&heap);
-    debugf("[FT64DIAG r2t] NEW phase=%s kind=%s size=%u result=%p "
-           "heap=%d/%d free=%d\n",
-           phase ? phase : "?", kind ? kind : "?", (unsigned)size, result,
-           heap.used, heap.total, heap.total - heap.used);
+    debugf("[FT64DIAG r2u] NEW seq=%u phase=%s kind=%s size=%u "
+           "result=%p caller=%p heap=%d/%d free=%d\n",
+           (unsigned)sequence, phase ? phase : "?", kind ? kind : "?",
+           (unsigned)size, result, caller, heap.used, heap.total,
+           heap.total - heap.used);
     s_ft64AllocatorDiagBusy = false;
 }
 
-static void *ft64_allocate_or_abort(const char *kind, size_t size) {
+static void *ft64_allocate_or_abort(const char *kind, size_t size,
+                                    void *caller) {
     if (size == 0)
         size = 1;
 
-    ft64_diag_new("request", kind, size, 0, false);
+    const uint32 sequence = ++s_ft64AllocatorSequence;
+    ft64_diag_new(sequence, "request", kind, size, 0, caller, false);
     void *result = malloc(size);
     if (!result) {
-        ft64_diag_new("failed", kind, size, 0, true);
+        ft64_diag_new(sequence, "failed", kind, size, 0, caller, true);
         abort();
     }
 
-    ft64_diag_new("allocated", kind, size, result, false);
+    ft64_diag_new(sequence, "allocated", kind, size, result, caller, false);
     return result;
 }
 
 void *operator new(size_t size) {
-    return ft64_allocate_or_abort("object", size);
+    return ft64_allocate_or_abort("object", size, __builtin_return_address(0));
 }
 
 void *operator new[](size_t size) {
-    return ft64_allocate_or_abort("array", size);
+    return ft64_allocate_or_abort("array", size, __builtin_return_address(0));
 }
 
 OSystem_N64Libdragon::OSystem_N64Libdragon()
@@ -86,16 +112,27 @@ OSystem_N64Libdragon::OSystem_N64Libdragon()
     debug_init(DEBUG_FEATURE_LOG_USB | DEBUG_FEATURE_LOG_EMU);
     s_ft64AllocatorDiagReady = true;
     bool sd = debug_init_sdfs("sd:/", -1);
-    debugf("[FT64DIAG r2t] BOOT backend starting; sdfs=%d\n", sd ? 1 : 0);
+    debugf("[FT64DIAG r2u] BOOT backend starting; sdfs=%d\n", sd ? 1 : 0);
+    ft64_diag_heap_marker("ctor-debug-sdfs");
 
     display_init(RESOLUTION_320x240, DEPTH_16_BPP, 3, GAMMA_NONE, FILTERS_RESAMPLE);
+    ft64_diag_heap_marker("ctor-display");
+
     joypad_init();
     timer_init();
+    ft64_diag_heap_marker("ctor-input-timer");
+
     audio_init(kAudioHz, 3);
+    ft64_diag_heap_marker("ctor-audio");
 
     _game.create(_gameW, _gameH, Graphics::PixelFormat::createFormatCLUT8());
+    ft64_diag_heap_marker("ctor-game8");
+
     _game16 = (uint16 *)calloc(_gameW * _gameH, sizeof(uint16));
+    ft64_diag_heap_marker("ctor-game16");
+
     _overlay = (uint16 *)calloc(kScreenW * kScreenH, sizeof(uint16));
+    ft64_diag_heap_marker("ctor-overlay");
     memset(_palette, 0, sizeof(_palette));
     memset(_exactPalette, 0, sizeof(_exactPalette));
     memset(_cursorPalette, 0, sizeof(_cursorPalette));
@@ -103,6 +140,7 @@ OSystem_N64Libdragon::OSystem_N64Libdragon()
     memset(&_lastButtons, 0, sizeof(_lastButtons));
 
     _fsFactory = new N64LibdragonFilesystemFactory();
+    ft64_diag_heap_marker("ctor-fsfactory");
 }
 
 OSystem_N64Libdragon::~OSystem_N64Libdragon() {
@@ -124,19 +162,26 @@ OSystem_N64Libdragon::~OSystem_N64Libdragon() {
 }
 
 void OSystem_N64Libdragon::initBackend() {
+    ft64_diag_heap_marker("initBackend-enter");
+
     ConfMan.setInt("autosave_period", 0);
     ConfMan.setBool("FM_high_quality", false);
     ConfMan.setBool("FM_medium_quality", true);
 
     _savefileManager = new DefaultSaveFileManager("sd:/fullthrottle/saves");
+    ft64_diag_heap_marker("initBackend-save");
+
     _timerManager = new DefaultTimerManager();
+    ft64_diag_heap_marker("initBackend-timer");
 
     _mixer = new Audio::MixerImpl(this, audio_get_frequency());
     _mixer->setReady(true);
+    ft64_diag_heap_marker("initBackend-mixer");
 
     EventsBaseBackend::initBackend();
+    ft64_diag_heap_marker("initBackend-events");
 
-    debugf("[FT64DIAG r2t] INIT complete audio=%dHz buffer=%d game=%dx%d\n",
+    debugf("[FT64DIAG r2u] INIT complete audio=%dHz buffer=%d game=%dx%d\n",
            audio_get_frequency(), audio_get_buffer_length(), _gameW, _gameH);
 }
 
@@ -181,17 +226,23 @@ void OSystem_N64Libdragon::initSize(uint width, uint height, const Graphics::Pix
     width = std::min<uint>(width, kScreenW);
     height = std::min<uint>(height, kScreenH);
 
+    ft64_diag_heap_marker("initSize-before-free");
     _game.free();
     if (_game16) free(_game16);
     _game16 = 0;
+    ft64_diag_heap_marker("initSize-after-free");
 
     _gameW = (int)width;
     _gameH = (int)height;
-    debugf("[FT64DIAG r2t] VIDEO initSize %dx%d ms=%u\n",
+    debugf("[FT64DIAG r2u] VIDEO initSize %dx%d ms=%u\n",
            _gameW, _gameH, (unsigned)getMillis());
+
     _game.create(_gameW, _gameH, Graphics::PixelFormat::createFormatCLUT8());
     memset(_game.pixels, 0, _game.pitch * _game.h);
+    ft64_diag_heap_marker("initSize-game8");
+
     _game16 = (uint16 *)calloc(_gameW * _gameH, sizeof(uint16));
+    ft64_diag_heap_marker("initSize-game16");
 
     _mouseX = _gameW / 2;
     _mouseY = _gameH / 2;
@@ -337,6 +388,10 @@ void OSystem_N64Libdragon::serviceTimer() {
 
 void OSystem_N64Libdragon::updateScreen() {
     ++s_diagUpdateCalls;
+    if (!s_ft64FirstUpdateLogged) {
+        s_ft64FirstUpdateLogged = true;
+        ft64_diag_heap_marker("first-update");
+    }
     serviceAudio();
     serviceTimer();
 
@@ -344,7 +399,7 @@ void OSystem_N64Libdragon::updateScreen() {
     if (!s_diagLastHeartbeat || (uint32)(diagNow - s_diagLastHeartbeat) >= 1000) {
         heap_stats_t heap;
         sys_get_heap_stats(&heap);
-        debugf("[FT64DIAG r2t] HB ms=%u game=%dx%d ovl=%d dirty=%d g16dirty=%d upd=%u poll=%u present=%u copy=%u full=%u pal=%u heap=%d/%d free=%d\n",
+        debugf("[FT64DIAG r2u] HB ms=%u game=%dx%d ovl=%d dirty=%d g16dirty=%d upd=%u poll=%u present=%u copy=%u full=%u pal=%u heap=%d/%d free=%d\n",
                (unsigned)diagNow, _gameW, _gameH, _overlayVisible ? 1 : 0,
                _screenDirty ? 1 : 0, _game16Dirty ? 1 : 0,
                (unsigned)s_diagUpdateCalls, (unsigned)s_diagPollCalls,
@@ -422,7 +477,7 @@ void OSystem_N64Libdragon::setShakePos(int shakeOffset) {
 }
 
 void OSystem_N64Libdragon::showOverlay() {
-    debugf("[FT64DIAG r2t] OVL show ms=%u game=%dx%d\n",
+    debugf("[FT64DIAG r2u] OVL show ms=%u game=%dx%d\n",
            (unsigned)getMillis(), _gameW, _gameH);
     _overlayVisible = true;
     clampMouse();
@@ -432,7 +487,7 @@ void OSystem_N64Libdragon::showOverlay() {
 }
 
 void OSystem_N64Libdragon::hideOverlay() {
-    debugf("[FT64DIAG r2t] OVL hide ms=%u game=%dx%d\n",
+    debugf("[FT64DIAG r2u] OVL hide ms=%u game=%dx%d\n",
            (unsigned)getMillis(), _gameW, _gameH);
     _overlayVisible = false;
     clampMouse();
@@ -452,7 +507,7 @@ void OSystem_N64Libdragon::clearOverlay() {
      * overlay remains active. This backend uses fake alpha blending, so copy
      * the current game image into the overlay exactly as the historical N64
      * backend did instead of clearing the overlay to black. */
-    debugf("[FT64DIAG r2t] OVL clear ms=%u game=%dx%d g16dirty=%d\n",
+    debugf("[FT64DIAG r2u] OVL clear ms=%u game=%dx%d g16dirty=%d\n",
            (unsigned)getMillis(), _gameW, _gameH, _game16Dirty ? 1 : 0);
 
     if (_game16Dirty)
@@ -606,11 +661,15 @@ bool OSystem_N64Libdragon::pollEvent(Common::Event &event) {
     serviceTimer();
 
     ++s_diagPollCalls;
+    if (!s_ft64FirstPollLogged) {
+        s_ft64FirstPollLogged = true;
+        ft64_diag_heap_marker("first-poll");
+    }
     const uint32 now = getMillis();
     if (!s_diagLastHeartbeat || (uint32)(now - s_diagLastHeartbeat) >= 1000) {
         heap_stats_t heap;
         sys_get_heap_stats(&heap);
-        debugf("[FT64DIAG r2t] HB src=poll ms=%u game=%dx%d ovl=%d dirty=%d g16dirty=%d upd=%u poll=%u present=%u copy=%u full=%u pal=%u heap=%d/%d free=%d\n",
+        debugf("[FT64DIAG r2u] HB src=poll ms=%u game=%dx%d ovl=%d dirty=%d g16dirty=%d upd=%u poll=%u present=%u copy=%u full=%u pal=%u heap=%d/%d free=%d\n",
                (unsigned)now, _gameW, _gameH, _overlayVisible ? 1 : 0,
                _screenDirty ? 1 : 0, _game16Dirty ? 1 : 0,
                (unsigned)s_diagUpdateCalls, (unsigned)s_diagPollCalls,
@@ -716,7 +775,7 @@ void OSystem_N64Libdragon::unlockMutex(MutexRef mutex) { (void)mutex; }
 void OSystem_N64Libdragon::deleteMutex(MutexRef mutex) { (void)mutex; }
 
 void OSystem_N64Libdragon::quit() {
-    debugf("[FT64DIAG r2t] QUIT requested ms=%u\n", (unsigned)getMillis());
+    debugf("[FT64DIAG r2u] QUIT requested ms=%u\n", (unsigned)getMillis());
 }
 
 Common::String OSystem_N64Libdragon::getDefaultConfigFileName() {

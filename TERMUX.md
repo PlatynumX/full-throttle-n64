@@ -1,13 +1,12 @@
-# Full Throttle N64 r2t — Termux
+# Full Throttle N64 r2u — Termux
 
-Use the corrected `full-throttle-n64-r2t-allocator-diagnostics-update-v2.zip`.
+The r2u updater advances the exact r2t diagnostic tree.
 
-The updater first proves the four-file ScummVM patch against the exact pinned
-fixture and proves the allocator patch against the exact reconstructed r2s
-backend included in the package.
+It validates both r2u patches against exact fixtures, fresh-clones GitHub,
+proves the live tree still has the exact r2t source/backend hashes, applies the
+backend patch exactly, installs r2u, runs preflight, checks the exact staged path
+set, and refuses to push if master moves.
 
-It then fresh-clones GitHub, verifies the live project is still the failed r2s
-baseline, applies the backend patch exactly, installs r2t, runs preflight,
-checks the exact staged path set, and refuses to push if master moves.
-
-No game/demo data is fetched or packaged.
+After the build, keep the GitHub `full-throttle-n64-r2u-build-report` artifact.
+It contains the ELF and symbol table needed to resolve runtime allocation
+caller addresses.
