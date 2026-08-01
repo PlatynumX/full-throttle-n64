@@ -73,6 +73,16 @@ OBJS := \
 
 include $(srcdir)/Makefile.common
 
+# GNU ld scans static archives from left to right. Makefile.common places
+# gui/libgui.a before engines/libengines.a, but SCUMM's engine dialogs reference
+# AboutDialog, SaveLoadChooser, and OptionsDialog from libgui. r2v removed the
+# launcher roots that previously caused those GUI members to be extracted early,
+# exposing the latent archive-order dependency. Move libgui directly after the
+# generic engine archive while leaving video/graphics/audio/common later.
+FT64_GUI_ARCHIVE := gui/libgui.a
+OBJS := $(filter-out $(FT64_GUI_ARCHIVE),$(OBJS))
+OBJS := $(subst engines/libengines.a,engines/libengines.a $(FT64_GUI_ARCHIVE),$(OBJS))
+
 TARGET := full-throttle-n64-r2v
 
 all: $(TARGET).z64
