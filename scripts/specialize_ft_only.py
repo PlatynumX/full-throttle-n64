@@ -511,7 +511,7 @@ def transform_scumm(lines: list[str]) -> list[str]:
         lines,
         heap_threshold,
         heap_threshold,
-        ["\t_res->setHeapThreshold(400000, 2 * 1024 * 1024);"],
+        ["\t_res->setHeapThreshold(400000, 550000);"],
         "N64 resource cache threshold",
     )
 
@@ -598,7 +598,7 @@ def verify_outputs(outputs: dict[str, list[str]]) -> None:
         (scumm, "_sound->_musicType = MDT_NONE;", "fixed generic music-off"),
         (
             scumm,
-            "_res->setHeapThreshold(400000, 2 * 1024 * 1024);",
+            "_res->setHeapThreshold(400000, 550000);",
             "N64 resource cache threshold",
         ),
     ]
