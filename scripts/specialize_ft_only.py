@@ -502,6 +502,19 @@ def transform_scumm(lines: list[str]) -> list[str]:
         "disable generic MIDI-era music setup",
     )
 
+    heap_threshold = find_unique_line(
+        lines,
+        "_res->setHeapThreshold(400000, maxHeapThreshold);",
+        "N64 resource cache threshold",
+    )
+    conditional_region(
+        lines,
+        heap_threshold,
+        heap_threshold,
+        ["\t_res->setHeapThreshold(400000, 2 * 1024 * 1024);"],
+        "N64 resource cache threshold",
+    )
+
     guard_unique_line(
         lines, "_debugger->onFrame();", "guard debugger frame hook"
     )
@@ -547,6 +560,7 @@ EXPECTED_MARKERS = {
         "fixed AKOS costume renderer",
         "fixed actor allocation",
         "disable generic MIDI-era music setup",
+        "N64 resource cache threshold",
         "guard debugger frame hook",
         "guard Towns volume hook",
     ],
@@ -582,6 +596,11 @@ def verify_outputs(outputs: dict[str, list[str]]) -> None:
         (scumm, "_costumeRenderer = new AkosRenderer(this);", "fixed AKOS"),
         (scumm, "_actors[i] = new Actor(this, i);", "fixed actor"),
         (scumm, "_sound->_musicType = MDT_NONE;", "fixed generic music-off"),
+        (
+            scumm,
+            "_res->setHeapThreshold(400000, 2 * 1024 * 1024);",
+            "N64 resource cache threshold",
+        ),
     ]
     for text, needle, label in required:
         if needle not in text:
