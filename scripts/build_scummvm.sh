@@ -4,7 +4,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SCUMMVM="$ROOT/work/scummvm"
 PORT="$SCUMMVM/backends/platform/n64libdragon"
 ART="$ROOT/artifacts"
-ROM="full-throttle-n64-r2v.z64"
+ROM="full-throttle-n64-r2v-v15.z64"
 mkdir -p "$ART"
 
 set +e
@@ -13,13 +13,13 @@ make -C "$PORT" V=1 -j"$(nproc)" 2>&1 | tee "$ART/scummvm-build.log"
 rc=${PIPESTATUS[0]}
 set -e
 
-ELF="$PORT/build/full-throttle-n64-r2v.elf"
+ELF="$PORT/build/full-throttle-n64-r2v-v15.elf"
 
 if [ "$rc" -eq 0 ] && [ -f "$PORT/$ROM" ] && [ -f "$ELF" ]; then
     cp "$PORT/$ROM" "$ART/$ROM"
-    cp "$ELF" "$ART/full-throttle-n64-r2v.elf"
-    sha256sum "$ART/$ROM" > "$ART/full-throttle-n64-r2v.sha256"
-    sha256sum "$ART/full-throttle-n64-r2v.elf" > "$ART/full-throttle-n64-r2v-elf.sha256"
+    cp "$ELF" "$ART/full-throttle-n64-r2v-v15.elf"
+    sha256sum "$ART/$ROM" > "$ART/full-throttle-n64-r2v-v15.sha256"
+    sha256sum "$ART/full-throttle-n64-r2v-v15.elf" > "$ART/full-throttle-n64-r2v-v15-elf.sha256"
 
     mips64-elf-size "$ELF" > "$ART/r2v-elf-size.txt"
     mips64-elf-size -A "$ELF" > "$ART/r2v-elf-sections.txt"
@@ -32,9 +32,9 @@ if [ "$rc" -eq 0 ] && [ -f "$PORT/$ROM" ] && [ -f "$ELF" ]; then
     mips64-elf-nm -C -S --size-sort --defined-only "$ELF" > "$ART/r2v-elf-symbols-demangled-by-size.txt"
     tail -n 400 "$ART/r2v-elf-symbols-by-size.txt" > "$ART/r2v-largest-400-symbols.txt"
 
-    MAP="$PORT/build/full-throttle-n64-r2v.map"
+    MAP="$PORT/build/full-throttle-n64-r2v-v15.map"
     if [ -f "$MAP" ]; then
-        cp "$MAP" "$ART/full-throttle-n64-r2v.map"
+        cp "$MAP" "$ART/full-throttle-n64-r2v-v15.map"
     fi
 
     baseline_static=3836317

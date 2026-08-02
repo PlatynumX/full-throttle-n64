@@ -2,16 +2,16 @@ BUILD_DIR=build
 SOURCE_DIR=.
 include $(N64_INST)/include/n64.mk
 
-N64_ROM_TITLE="FT64 r2v SD Probe"
+N64_ROM_TITLE="FT64 R2V V15 PROBE"
 N64_ROM_REGIONFREE=true
 N64_ROM_CONTROLLER1=n64
 
-all: ft64-sd-probe-r2v.z64
+all: ft64-sd-probe-r2v-v15.z64
 
-$(BUILD_DIR)/ft64-sd-probe-r2v.elf: $(BUILD_DIR)/sd_probe.o
+$(BUILD_DIR)/ft64-sd-probe-r2v-v15.elf: $(BUILD_DIR)/sd_probe.o
 
 clean:
-	rm -rf $(BUILD_DIR) ft64-sd-probe-r2v.z64
+	rm -rf $(BUILD_DIR) ft64-sd-probe-r2v-v15.z64
 
 -include $(wildcard $(BUILD_DIR)/*.d)
 
