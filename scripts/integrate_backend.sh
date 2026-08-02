@@ -30,6 +30,8 @@ for rel in \
     gui/module.mk \
     engines/scumm/detection.cpp \
     engines/scumm/scumm.cpp \
+    engines/scumm/resource.cpp \
+    engines/scumm/script_v6.cpp \
     engines/scumm/insane/insane.cpp \
     engines/scumm/smush/smush_player.cpp \
     engines/scumm/smush/smush_player.h; do
@@ -41,6 +43,8 @@ done
 sed -n '1,120p;330,475p' "$SCUMMVM/base/main.cpp" > "$ART/base-main-before.txt"
 sed -n '1025,1120p' "$SCUMMVM/engines/scumm/detection.cpp" > "$ART/scumm-detection-before.txt"
 sed -n '95,140p;600,620p;1125,1180p;1260,1410p;1605,1800p;1848,1872p' "$SCUMMVM/engines/scumm/scumm.cpp" > "$ART/scumm-core-before.txt"
+sed -n '20,60p;748,790p;965,1020p' "$SCUMMVM/engines/scumm/resource.cpp" > "$ART/scumm-resource-before.txt"
+sed -n '20,50p;2378,2420p' "$SCUMMVM/engines/scumm/script_v6.cpp" > "$ART/scumm-video-opcode-before.txt"
 sed -n '1,45p' "$SCUMMVM/gui/module.mk" > "$ART/gui-module-before.txt"
 sed -n '205,250p;895,955p' "$SCUMMVM/engines/scumm/smush/smush_player.cpp" > "$ART/smush-player-before.txt"
 sed -n '30,115p' "$SCUMMVM/engines/scumm/smush/smush_player.h" > "$ART/smush-header-before.txt"
@@ -58,7 +62,7 @@ grep -Fq '_debugger = new ScummDebugger(this);' "$SCUMMVM/engines/scumm/scumm.cp
 grep -Fq 'GUI::LauncherDialog dlg;' "$SCUMMVM/base/main.cpp"
 
 # The four small, previously validated INSANE/SMUSH/GUI changes remain one
-# exact patch. The three large pinned files are specialized by a deterministic
+# exact patch. The five pinned files are specialized by a deterministic
 # one-match transformer: every source block must occur exactly once or the
 # build stops before compilation. There is no fuzzy apply or --3way fallback.
 echo "[integrate] checking exact four-file r2v runtime patch"
@@ -99,6 +103,11 @@ grep -Fq '_sound = new Sound(this, _mixer);' "$SCUMMVM/engines/scumm/scumm.cpp"
 grep -Fq '_charset = new CharsetRendererClassic(this);' "$SCUMMVM/engines/scumm/scumm.cpp"
 grep -Fq '_costumeRenderer = new AkosRenderer(this);' "$SCUMMVM/engines/scumm/scumm.cpp"
 grep -Fq '_sound->_musicType = MDT_NONE;' "$SCUMMVM/engines/scumm/scumm.cpp"
+grep -Fq 'ft64_diag_resource_event' "$SCUMMVM/engines/scumm/resource.cpp"
+grep -Fq '"post-expire"' "$SCUMMVM/engines/scumm/resource.cpp"
+grep -Fq 'ft64Victim._size' "$SCUMMVM/engines/scumm/resource.cpp"
+grep -Fq 'ft64_diag_video_opcode' "$SCUMMVM/engines/scumm/script_v6.cpp"
+grep -Fq 'vm.slot[_currentScript].number' "$SCUMMVM/engines/scumm/script_v6.cpp"
 grep -Fq '#ifndef N64_FT_ONLY' "$SCUMMVM/base/main.cpp"
 [ "$(grep -Fc '_player->setCurVideoFlags(_smush_setupsan2);' "$SCUMMVM/engines/scumm/insane/insane.cpp")" -eq 3 ]
 # Keep the established 1.6.0 INSANE field rather than importing the later
@@ -115,6 +124,8 @@ for rel in \
     gui/module.mk \
     engines/scumm/detection.cpp \
     engines/scumm/scumm.cpp \
+    engines/scumm/resource.cpp \
+    engines/scumm/script_v6.cpp \
     engines/scumm/insane/insane.cpp \
     engines/scumm/smush/smush_player.cpp \
     engines/scumm/smush/smush_player.h; do
@@ -129,6 +140,10 @@ sed -n '850,885p;1398,1470p' "$SCUMMVM/engines/scumm/insane/insane.cpp" > "$ART/
 sed -n '1,125p;330,475p' "$SCUMMVM/base/main.cpp" > "$ART/base-main-after.txt"
 sed -n '1025,1125p' "$SCUMMVM/engines/scumm/detection.cpp" > "$ART/scumm-detection-after.txt"
 sed -n '95,145p;600,625p;1125,1185p;1260,1420p;1605,1810p;1848,1878p' "$SCUMMVM/engines/scumm/scumm.cpp" > "$ART/scumm-core-after.txt"
+sed -n '20,65p;748,825p;965,1055p' "$SCUMMVM/engines/scumm/resource.cpp" > "$ART/scumm-resource-after.txt"
+sed -n '20,60p;2378,2445p' "$SCUMMVM/engines/scumm/script_v6.cpp" > "$ART/scumm-video-opcode-after.txt"
+grep -n 'FT64 r2v structural: resource' "$SCUMMVM/engines/scumm/resource.cpp" > "$ART/resource-diagnostic-markers.txt"
+grep -n 'FT64 r2v structural: .*opcode diagnostic' "$SCUMMVM/engines/scumm/script_v6.cpp" > "$ART/video-opcode-diagnostic-markers.txt"
 
 # Install the hardware-proven libdragon backend as complete source files.
 rm -rf "$DST"
@@ -149,6 +164,11 @@ grep -Fq '[FT64DIAG r2v] NEW seq=%u phase=%s kind=%s size=%u' "$DST/osys_n64_lib
 grep -Fq 'caller=%p heap=%d/%d free=%d' "$DST/osys_n64_libdragon.cpp"
 grep -Fq 'static const size_t kFt64DiagLargeAllocation = 16384;' "$DST/osys_n64_libdragon.cpp"
 grep -Fq 'void ft64_diag_heap_marker(const char *tag)' "$DST/osys_n64_libdragon.cpp"
+grep -Fq 'void ft64_diag_resource_event(const char *phase' "$DST/osys_n64_libdragon.cpp"
+grep -Fq '[FT64DIAG r2v] RES phase=%s type=%s typeId=%d id=%d' "$DST/osys_n64_libdragon.cpp"
+grep -Fq 'contiguous=%d probe=%p heap=%d/%d free=%d' "$DST/osys_n64_libdragon.cpp"
+grep -Fq 'void ft64_diag_video_opcode(const char *fileName' "$DST/osys_n64_libdragon.cpp"
+grep -Fq '[FT64DIAG r2v] VIDEO opcode=c9 sub=6 file=%s script=%d' "$DST/osys_n64_libdragon.cpp"
 grep -Fq 'ft64_diag_heap_marker("ctor-display");' "$DST/osys_n64_libdragon.cpp"
 grep -Fq 'DEPTH_16_BPP, 2, GAMMA_NONE' "$DST/osys_n64_libdragon.cpp"
 grep -Fq 'ft64_diag_heap_marker("initBackend-mixer");' "$DST/osys_n64_libdragon.cpp"

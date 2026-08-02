@@ -153,6 +153,15 @@ grep -Fq 'fixed sound manager' "$SPECIALIZER"
 grep -Fq 'disable generic MIDI-era music setup' "$SPECIALIZER"
 grep -Fq 'N64 resource cache threshold' "$SPECIALIZER"
 grep -Fq '_res->setHeapThreshold(400000, 550000);' "$SPECIALIZER"
+grep -Fq 'def transform_resource(lines: list[str]) -> list[str]:' "$SPECIALIZER"
+grep -Fq 'def transform_script_v6(lines: list[str]) -> list[str]:' "$SPECIALIZER"
+grep -Fq 'resource post-expire probe' "$SPECIALIZER"
+grep -Fq 'resource eviction' "$SPECIALIZER"
+grep -Fq 'video opcode intent diagnostic' "$SPECIALIZER"
+grep -Fq 'SMUSH opcode diagnostic' "$SPECIALIZER"
+grep -Fq 'INSANE opcode diagnostic' "$SPECIALIZER"
+grep -Fq 'ft64_diag_resource_event' "$SPECIALIZER"
+grep -Fq 'ft64_diag_video_opcode' "$SPECIALIZER"
 grep -Fq 'guard debugger frame hook' "$SPECIALIZER"
 grep -Fq 'guard Towns volume hook' "$SPECIALIZER"
 grep -Fq 'res.game.id != GID_FT || res.game.version != 7 || res.game.heversion != 0' "$SPECIALIZER"
@@ -204,6 +213,12 @@ grep -Fq 'void *operator new[](size_t size)' backend/osys_n64_libdragon.cpp
 grep -Fq '[FT64DIAG r2v] NEW seq=%u phase=%s kind=%s size=%u' backend/osys_n64_libdragon.cpp
 grep -Fq 'caller=%p heap=%d/%d free=%d' backend/osys_n64_libdragon.cpp
 grep -Fq 'void ft64_diag_heap_marker(const char *tag)' backend/osys_n64_libdragon.cpp
+grep -Fq 'void ft64_diag_resource_event(const char *phase' backend/osys_n64_libdragon.cpp
+grep -Fq '[FT64DIAG r2v] RES phase=%s type=%s typeId=%d id=%d' backend/osys_n64_libdragon.cpp
+grep -Fq 'contiguous=%d probe=%p heap=%d/%d free=%d' backend/osys_n64_libdragon.cpp
+grep -Fq 'strcmp(phase, "post-expire") == 0' backend/osys_n64_libdragon.cpp
+grep -Fq 'void ft64_diag_video_opcode(const char *fileName' backend/osys_n64_libdragon.cpp
+grep -Fq '[FT64DIAG r2v] VIDEO opcode=c9 sub=6 file=%s script=%d' backend/osys_n64_libdragon.cpp
 grep -Fq 'expanded=%d physical=%u ' backend/osys_n64_libdragon.cpp
 grep -Fq 'outside=%u heap=%d/%d free=%d' backend/osys_n64_libdragon.cpp
 grep -Fq '__builtin_return_address(0)' backend/osys_n64_libdragon.cpp

@@ -56,6 +56,56 @@ void ft64_diag_heap_marker(const char *tag) {
     s_ft64AllocatorDiagBusy = false;
 }
 
+void ft64_diag_resource_event(const char *phase, const char *typeName,
+                              int typeId, int resourceId,
+                              uint32 resourceSize, uint32 allocationSize,
+                              uint32 cacheAllocated, uint32 minThreshold,
+                              uint32 maxThreshold, uint32 victimSize,
+                              int victimCounter) {
+    if (!s_ft64AllocatorDiagReady || s_ft64AllocatorDiagBusy)
+        return;
+    if (allocationSize < kFt64DiagLargeAllocation)
+        return;
+
+    s_ft64AllocatorDiagBusy = true;
+    void *probe = 0;
+    int contiguous = -1;
+    if (phase && strcmp(phase, "post-expire") == 0) {
+        probe = malloc(allocationSize ? allocationSize : 1);
+        contiguous = probe ? 1 : 0;
+        if (probe)
+            free(probe);
+    }
+
+    heap_stats_t heap;
+    sys_get_heap_stats(&heap);
+    debugf("[FT64DIAG r2v] RES phase=%s type=%s typeId=%d id=%d "
+           "resource=%u request=%u cache=%u min=%u max=%u victim=%u "
+           "counter=%d contiguous=%d probe=%p heap=%d/%d free=%d\n",
+           phase ? phase : "?", typeName ? typeName : "?", typeId,
+           resourceId, (unsigned)resourceSize, (unsigned)allocationSize,
+           (unsigned)cacheAllocated, (unsigned)minThreshold,
+           (unsigned)maxThreshold, (unsigned)victimSize, victimCounter,
+           contiguous, probe, heap.used, heap.total, heap.total - heap.used);
+    s_ft64AllocatorDiagBusy = false;
+}
+
+void ft64_diag_video_opcode(const char *fileName, int scriptId, int roomId,
+                            int frameRate, int mode) {
+    if (!s_ft64AllocatorDiagReady || s_ft64AllocatorDiagBusy)
+        return;
+
+    s_ft64AllocatorDiagBusy = true;
+    heap_stats_t heap;
+    sys_get_heap_stats(&heap);
+    debugf("[FT64DIAG r2v] VIDEO opcode=c9 sub=6 file=%s script=%d "
+           "room=%d rate=%d mode=%d ms=%u heap=%d/%d free=%d\n",
+           fileName ? fileName : "?", scriptId, roomId, frameRate, mode,
+           (unsigned)get_ticks_ms(), heap.used, heap.total,
+           heap.total - heap.used);
+    s_ft64AllocatorDiagBusy = false;
+}
+
 static void ft64_diag_new(uint32 sequence, const char *phase, const char *kind,
                           size_t size, void *result, void *caller,
                           bool forceLog) {

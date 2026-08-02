@@ -530,6 +530,199 @@ def transform_scumm(lines: list[str]) -> list[str]:
     return lines
 
 
+def transform_resource(lines: list[str]) -> list[str]:
+    lines = list(lines)
+    include = find_unique_line(
+        lines, '#include "scumm/verbs.h"', "resource diagnostic bridge"
+    )
+    lines[include + 1:include + 1] = [
+        "#ifdef N64_FT_ONLY",
+        "// FT64 r2v structural: resource diagnostic bridge",
+        "extern void ft64_diag_resource_event(const char *phase, const char *typeName, int typeId, int resourceId, uint32 resourceSize, uint32 allocationSize, uint32 cacheAllocated, uint32 minThreshold, uint32 maxThreshold, uint32 victimSize, int victimCounter);",
+        "#endif",
+    ]
+
+    create_sig = find_unique_line(
+        lines,
+        "byte *ResourceManager::createResource(ResType type, ResId idx, uint32 size) {",
+        "resource create diagnostics",
+    )
+    _, create_end = find_braced_region(lines, create_sig, "resource create diagnostics")
+
+    allocated = find_unique_line(
+        lines,
+        "setResourceCounter(type, idx, 1);",
+        "resource allocation success",
+        start=create_sig,
+        end=create_end,
+    )
+    lines[allocated + 1:allocated + 1] = [
+        "#ifdef N64_FT_ONLY",
+        "// FT64 r2v structural: resource allocation success",
+        "\t::ft64_diag_resource_event(\"allocated\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, 0, -1);",
+        "#endif",
+    ]
+
+    post_expire = find_unique_line(
+        lines,
+        "expireResources(size);",
+        "resource post-expire probe",
+        start=create_sig,
+        end=create_end,
+    )
+    lines[post_expire + 1:post_expire + 1] = [
+        "#ifdef N64_FT_ONLY",
+        "// FT64 r2v structural: resource post-expire probe",
+        "\t::ft64_diag_resource_event(\"post-expire\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, 0, -1);",
+        "#endif",
+    ]
+
+    request = find_unique_line(
+        lines,
+        "nukeResource(type, idx);",
+        "resource create request",
+        start=create_sig,
+        end=create_end,
+    )
+    lines[request + 1:request + 1] = [
+        "#ifdef N64_FT_ONLY",
+        "// FT64 r2v structural: resource create request",
+        "\t::ft64_diag_resource_event(\"request\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, 0, -1);",
+        "#endif",
+    ]
+
+    expire_sig = find_unique_line(
+        lines,
+        "void ResourceManager::expireResources(uint32 size) {",
+        "resource expiration diagnostics",
+    )
+    _, expire_end = find_braced_region(lines, expire_sig, "resource expiration diagnostics")
+
+    expire_done = find_unique_line(
+        lines,
+        'debugC(DEBUG_RESOURCE, "Expired resources, mem %d -> %d", oldAllocatedSize, _allocatedSize);',
+        "resource expiration complete",
+        start=expire_sig,
+        end=expire_end,
+    )
+    lines[expire_done:expire_done] = [
+        "#ifdef N64_FT_ONLY",
+        "// FT64 r2v structural: resource expiration complete",
+        "\t::ft64_diag_resource_event(\"expire-done\", \"none\", -1, -1, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, 0, -1);",
+        "#endif",
+    ]
+
+    no_start, no_end = find_unique_sequence(
+        lines,
+        [
+            "if (!best_type)",
+            "break;",
+            "nukeResource(best_type, best_res);",
+        ],
+        "resource eviction and no-candidate diagnostics",
+        start=expire_sig,
+        end=expire_end,
+    )
+    lines[no_start:no_end + 1] = [
+        "\t\tif (!best_type) {",
+        "#ifdef N64_FT_ONLY",
+        "// FT64 r2v structural: resource no-candidate",
+        "\t\t\t::ft64_diag_resource_event(\"no-candidate\", \"none\", -1, -1, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, 0, -1);",
+        "#endif",
+        "\t\t\tbreak;",
+        "\t\t}",
+        "#ifdef N64_FT_ONLY",
+        "// FT64 r2v structural: resource eviction",
+        "\t\tResource &ft64Victim = _types[best_type][best_res];",
+        "\t\t::ft64_diag_resource_event(\"evict\", nameOfResType(best_type), (int)best_type, best_res, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64Victim._size, (int)best_counter);",
+        "#endif",
+        "\t\tnukeResource(best_type, best_res);",
+    ]
+
+    skip_start, skip_end = find_unique_sequence(
+        lines,
+        [
+            "if (size + _allocatedSize < _maxHeapThreshold)",
+            "return;",
+        ],
+        "resource expiration skipped",
+        start=expire_sig,
+        end=expire_end,
+    )
+    lines[skip_start:skip_end + 1] = [
+        "\tif (size + _allocatedSize < _maxHeapThreshold) {",
+        "#ifdef N64_FT_ONLY",
+        "// FT64 r2v structural: resource expiration skipped",
+        "\t\t::ft64_diag_resource_event(\"expire-skip\", \"none\", -1, -1, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, 0, -1);",
+        "#endif",
+        "\t\treturn;",
+        "\t}",
+    ]
+    return lines
+
+
+def transform_script_v6(lines: list[str]) -> list[str]:
+    lines = list(lines)
+    include = find_unique_line(
+        lines, '#include "scumm/verbs.h"', "video opcode diagnostic bridge"
+    )
+    lines[include + 1:include + 1] = [
+        "#ifdef N64_FT_ONLY",
+        "// FT64 r2v structural: video opcode diagnostic bridge",
+        "extern void ft64_diag_video_opcode(const char *fileName, int scriptId, int roomId, int frameRate, int mode);",
+        "#endif",
+    ]
+
+    kernel = find_unique_line(
+        lines,
+        "void ScummEngine_v7::o6_kernelSetFunctions() {",
+        "video opcode diagnostics",
+    )
+    _, kernel_end = find_braced_region(lines, kernel, "video opcode diagnostics")
+
+    insane = find_unique_line(
+        lines,
+        "_insane->setSmushParams(_smushFrameRate);",
+        "INSANE opcode diagnostic",
+        start=kernel,
+        end=kernel_end,
+    )
+    lines[insane:insane] = [
+        "#ifdef N64_FT_ONLY",
+        "// FT64 r2v structural: INSANE opcode diagnostic",
+        "\t\t\t\t::ft64_diag_video_opcode(\"INSANE\", vm.slot[_currentScript].number, _currentRoom, _smushFrameRate, args[1]);",
+        "#endif",
+    ]
+
+    smush = find_unique_line(
+        lines,
+        "assert(videoname);",
+        "SMUSH opcode diagnostic",
+        start=kernel,
+        end=kernel_end,
+    )
+    lines[smush + 1:smush + 1] = [
+        "#ifdef N64_FT_ONLY",
+        "// FT64 r2v structural: SMUSH opcode diagnostic",
+        "\t\t\t\t::ft64_diag_video_opcode(videoname, vm.slot[_currentScript].number, _currentRoom, _smushFrameRate, args[1]);",
+        "#endif",
+    ]
+
+    intent = find_unique_line(
+        lines,
+        "// SMUSH movie playback",
+        "video opcode intent diagnostic",
+        start=kernel,
+        end=kernel_end,
+    )
+    lines[intent + 1:intent + 1] = [
+        "#ifdef N64_FT_ONLY",
+        "// FT64 r2v structural: video opcode intent diagnostic",
+        "\t\t\t::ft64_diag_video_opcode(\"pending\", vm.slot[_currentScript].number, _currentRoom, _smushFrameRate, args[1]);",
+        "#endif",
+    ]
+    return lines
+
 EXPECTED_MARKERS = {
     "base/main.cpp": [
         "guard EventRecorder include",
@@ -564,6 +757,22 @@ EXPECTED_MARKERS = {
         "guard debugger frame hook",
         "guard Towns volume hook",
     ],
+    "engines/scumm/resource.cpp": [
+        "resource diagnostic bridge",
+        "resource create request",
+        "resource post-expire probe",
+        "resource allocation success",
+        "resource expiration skipped",
+        "resource no-candidate",
+        "resource eviction",
+        "resource expiration complete",
+    ],
+    "engines/scumm/script_v6.cpp": [
+        "video opcode diagnostic bridge",
+        "video opcode intent diagnostic",
+        "SMUSH opcode diagnostic",
+        "INSANE opcode diagnostic",
+    ],
 }
 
 
@@ -580,6 +789,8 @@ def verify_outputs(outputs: dict[str, list[str]]) -> None:
     main = "\n".join(outputs["base/main.cpp"])
     detection = "\n".join(outputs["engines/scumm/detection.cpp"])
     scumm = "\n".join(outputs["engines/scumm/scumm.cpp"])
+    resource = "\\n".join(outputs["engines/scumm/resource.cpp"])
+    script_v6 = "\\n".join(outputs["engines/scumm/script_v6.cpp"])
 
     required = [
         (main, "#ifndef N64_FT_ONLY", "main guard"),
@@ -601,6 +812,14 @@ def verify_outputs(outputs: dict[str, list[str]]) -> None:
             "_res->setHeapThreshold(400000, 550000);",
             "N64 resource cache threshold",
         ),
+        (resource, "ft64_diag_resource_event", "resource diagnostic bridge"),
+        (resource, '"post-expire"', "resource contiguous probe event"),
+        (resource, '"evict"', "resource eviction event"),
+        (resource, "ft64Victim._size", "resource eviction size"),
+        (script_v6, "ft64_diag_video_opcode", "video opcode bridge"),
+        (script_v6, '"pending"', "video opcode intent"),
+        (script_v6, "vm.slot[_currentScript].number", "video script id"),
+        (script_v6, '"INSANE"', "INSANE video marker"),
     ]
     for text, needle, label in required:
         if needle not in text:
@@ -615,6 +834,8 @@ def build_outputs(root: Path) -> tuple[dict[str, list[str]], dict[str, bool]]:
         "base/main.cpp": root / "base/main.cpp",
         "engines/scumm/detection.cpp": root / "engines/scumm/detection.cpp",
         "engines/scumm/scumm.cpp": root / "engines/scumm/scumm.cpp",
+        "engines/scumm/resource.cpp": root / "engines/scumm/resource.cpp",
+        "engines/scumm/script_v6.cpp": root / "engines/scumm/script_v6.cpp",
     }
     missing = [str(path) for path in paths.values() if not path.is_file()]
     if missing:
@@ -632,6 +853,12 @@ def build_outputs(root: Path) -> tuple[dict[str, list[str]], dict[str, bool]]:
         ),
         "engines/scumm/scumm.cpp": transform_scumm(
             raw["engines/scumm/scumm.cpp"]
+        ),
+        "engines/scumm/resource.cpp": transform_resource(
+            raw["engines/scumm/resource.cpp"]
+        ),
+        "engines/scumm/script_v6.cpp": transform_script_v6(
+            raw["engines/scumm/script_v6.cpp"]
         ),
     }
     verify_outputs(outputs)
@@ -670,7 +897,7 @@ def main() -> int:
 
         outputs, final_newlines = build_outputs(args.scummvm_root)
         if args.check:
-            print("[ft-only] structural check passed for all three pinned files")
+            print("[ft-only] structural check passed for all five pinned files")
             return 0
 
         for rel, lines in outputs.items():
