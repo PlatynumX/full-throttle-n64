@@ -682,6 +682,47 @@ def transform_resource(lines: list[str]) -> list[str]:
         "\t}",
         "#endif",
     ]
+    large_sound_create = find_unique_line(
+        lines,
+        "byte *ResourceManager::createResource(ResType type, ResId idx, uint32 size) {",
+        "large sound allocation recovery",
+    )
+    _, large_sound_create_end = find_braced_region(
+        lines, large_sound_create, "large sound allocation recovery"
+    )
+    large_sound_alloc = find_unique_line(
+        lines,
+        "byte *ptr = new byte[size + SAFETY_AREA];",
+        "large sound allocation recovery",
+        start=large_sound_create,
+        end=large_sound_create_end,
+    )
+    lines[large_sound_alloc + 1:large_sound_alloc + 1] = [
+        "#ifdef N64_FT_ONLY",
+        "// FT64 r2v structural: large sound allocation recovery",
+        "\tif (ptr == NULL && type == rtSound && size >= 512 * 1024 && _vm->_sound) {",
+        "\t\t::ft64_diag_resource_event(\"large-sound-purge\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, 0, -1);",
+        "\t\t_vm->_sound->stopAllSounds();",
+        "\t\tuint32 ft64PurgedBytes = 0;",
+        "\t\tint ft64PurgedCount = 0;",
+        "\t\tResId ft64SoundId = _types[rtSound].size();",
+        "\t\twhile (ft64SoundId-- > 0) {",
+        "\t\t\tif (ft64SoundId == idx)",
+        "\t\t\t\tcontinue;",
+        "\t\t\tResource &ft64Sound = _types[rtSound][ft64SoundId];",
+        "\t\t\tif (!ft64Sound.isLocked() && ft64Sound._address && !_vm->isResourceInUse(rtSound, ft64SoundId) && !ft64Sound.isOffHeap()) {",
+        "\t\t\t\t::ft64_diag_resource_event(\"large-sound-evict\", nameOfResType(rtSound), (int)rtSound, (int)ft64SoundId, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64Sound._size, (int)ft64Sound.getResourceCounter());",
+        "\t\t\t\tft64PurgedBytes += ft64Sound._size;",
+        "\t\t\t\t++ft64PurgedCount;",
+        "\t\t\t\tnukeResource(rtSound, ft64SoundId);",
+        "\t\t\t}",
+        "\t\t}",
+        "\t\t::ft64_diag_resource_event(\"large-sound-retry\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64PurgedBytes, ft64PurgedCount);",
+        "\t\tptr = new byte[size + SAFETY_AREA];",
+        "\t\t::ft64_diag_resource_event(ptr ? \"large-sound-retry-ok\" : \"large-sound-retry-failed\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64PurgedBytes, ft64PurgedCount);",
+        "\t}",
+        "#endif",
+    ]
     return lines
 
 
@@ -791,6 +832,7 @@ EXPECTED_MARKERS = {
         "resource eviction",
         "resource expiration complete",
         "sound 633 transition recovery",
+        "large sound allocation recovery",
     ],
     "engines/scumm/script_v6.cpp": [
         "video opcode diagnostic bridge",
@@ -849,6 +891,16 @@ def verify_outputs(outputs: dict[str, list[str]]) -> None:
         (resource, "type == rtSound && idx == 633", "Sound 633 resource gate"),
         (resource, "size >= 512 * 1024", "Sound 633 large-allocation gate"),
         (resource, "_vm->_sound->stopAllSounds();", "Sound 633 iMUSE release"),
+        (resource, "large sound allocation recovery", "large-sound recovery marker"),
+        (resource, '"large-sound-purge"', "large-sound purge event"),
+        (resource, '"large-sound-evict"', "large-sound eviction event"),
+        (resource, '"large-sound-retry"', "large-sound retry event"),
+        (resource, '"large-sound-retry-ok"', "large-sound success event"),
+        (resource, "ft64SoundId-- > 0", "inactive sound scan"),
+        (resource, "!ft64Sound.isLocked()", "sound lock guard"),
+        (resource, "!_vm->isResourceInUse(rtSound, ft64SoundId)", "sound in-use guard"),
+        (resource, "!ft64Sound.isOffHeap()", "sound off-heap guard"),
+        (resource, "nukeResource(rtSound, ft64SoundId);", "inactive sound release"),
     ]
     for text, needle, label in required:
         if needle not in text:
