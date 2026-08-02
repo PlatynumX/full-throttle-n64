@@ -658,6 +658,30 @@ def transform_resource(lines: list[str]) -> list[str]:
         "\t\treturn;",
         "\t}",
     ]
+    sound633_create = find_unique_line(
+        lines,
+        "byte *ResourceManager::createResource(ResType type, ResId idx, uint32 size) {",
+        "sound 633 transition recovery",
+    )
+    _, sound633_create_end = find_braced_region(
+        lines, sound633_create, "sound 633 transition recovery"
+    )
+    sound633_expire = find_unique_line(
+        lines,
+        "expireResources(size);",
+        "sound 633 transition recovery",
+        start=sound633_create,
+        end=sound633_create_end,
+    )
+    lines[sound633_expire:sound633_expire] = [
+        "#ifdef N64_FT_ONLY",
+        "// FT64 r2v structural: sound 633 transition recovery",
+        "\tif (type == rtSound && idx == 633 && size >= 512 * 1024 && _vm->_sound) {",
+        "\t\t::ft64_diag_resource_event(\"sound-633-stop\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, 0, -1);",
+        "\t\t_vm->_sound->stopAllSounds();",
+        "\t}",
+        "#endif",
+    ]
     return lines
 
 
@@ -766,6 +790,7 @@ EXPECTED_MARKERS = {
         "resource no-candidate",
         "resource eviction",
         "resource expiration complete",
+        "sound 633 transition recovery",
     ],
     "engines/scumm/script_v6.cpp": [
         "video opcode diagnostic bridge",
@@ -820,6 +845,10 @@ def verify_outputs(outputs: dict[str, list[str]]) -> None:
         (script_v6, '"pending"', "video opcode intent"),
         (script_v6, "vm.slot[_currentScript].number", "video script id"),
         (script_v6, '"INSANE"', "INSANE video marker"),
+        (resource, '"sound-633-stop"', "Sound 633 recovery event"),
+        (resource, "type == rtSound && idx == 633", "Sound 633 resource gate"),
+        (resource, "size >= 512 * 1024", "Sound 633 large-allocation gate"),
+        (resource, "_vm->_sound->stopAllSounds();", "Sound 633 iMUSE release"),
     ]
     for text, needle, label in required:
         if needle not in text:
