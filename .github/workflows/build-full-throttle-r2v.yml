@@ -1,4 +1,4 @@
-name: Build Full Throttle N64 r2v v15
+name: Build Full Throttle N64 r2v v17
 
 on:
   workflow_dispatch:
@@ -83,7 +83,7 @@ jobs:
             echo
             echo "Artifact files:"
             find artifacts -type f -printf '%P %s bytes\n' | sort
-          } > artifacts/r2v-v15-summary.txt
+          } > artifacts/r2v-v17-summary.txt
           if [ -d work/scummvm/.git ]; then
             git -C work/scummvm diff --check \
               > artifacts/scummvm-git-diff-check.txt 2>&1 || true
@@ -95,11 +95,11 @@ jobs:
               > artifacts/libdragon-commit.txt || true
           fi
 
-      - name: Upload r2v v15 ROMs and pruning evidence
+      - name: Upload r2v v17 ROMs and pruning evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: full-throttle-n64-r2v-v15-build-report
+          name: full-throttle-n64-r2v-v17-build-report
           path: artifacts/
           if-no-files-found: error
           retention-days: 30
@@ -109,5 +109,5 @@ jobs:
         run: |
           echo "Probe outcome: ${{ steps.probe.outcome }}"
           echo "ScummVM outcome: ${{ steps.scummvm.outcome }}"
-          echo "Both logs were preserved in the r2v v15 build-report artifact."
+          echo "Both logs were preserved in the r2v v17 build-report artifact."
           exit 1

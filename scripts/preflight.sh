@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+trap 'rc=$?; printf "[preflight] FAILED line %s: %s (rc=%s)\n" "$LINENO" "$BASH_COMMAND" "$rc" >&2; exit "$rc"' ERR
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
@@ -46,12 +47,12 @@ test ! -e .github/workflows/build-full-throttle-r2q.yml
 test ! -e .github/workflows/build-full-throttle-r2o.yml
 test ! -e .github/workflows/build-full-throttle-r2p.yml
 test ! -e .github/workflows/build-full-throttle-r2n.yml
-grep -Fqx 'name: Build Full Throttle N64 r2v v15' "$WORKFLOW"
-grep -Fq 'name: full-throttle-n64-r2v-v15-build-report' "$WORKFLOW"
-grep -Fq 'TARGET := full-throttle-n64-r2v-v15' backend/Makefile.libdragon
-grep -Fq 'full-throttle-n64-r2v-v15.z64' scripts/build_scummvm.sh
-grep -Fq 'ft64-sd-probe-r2v-v15.z64' scripts/build_probe.sh
-grep -Fq 'FULL THROTTLE N64 - r2v-v15' probe/sd_probe.c
+grep -Fqx 'name: Build Full Throttle N64 r2v v17' "$WORKFLOW"
+grep -Fq 'name: full-throttle-n64-r2v-v17-build-report' "$WORKFLOW"
+grep -Fq 'TARGET := full-throttle-n64-r2v-v17' backend/Makefile.libdragon
+grep -Fq 'full-throttle-n64-r2v-v17.z64' scripts/build_scummvm.sh
+grep -Fq 'ft64-sd-probe-r2v-v17.z64' scripts/build_probe.sh
+grep -Fq 'FULL THROTTLE N64 - r2v-v17' probe/sd_probe.c
 # Historical documentation may legitimately mention earlier revisions. Reject only
 # Active build/runtime identities must all be r2v. Historical docs may mention earlier releases.
 if grep -RInE --exclude=preflight.sh 'full-throttle-n64-r2(n|o|p|q|r|s|t|u)(\.z64|-build-report)|ft64-sd-probe-r2(n|o|p|q|r|s|t|u)|Build Full Throttle N64 r2(n|o|p|q|r|s|t|u)|FULL THROTTLE N64 - r2(n|o|p|q|r|s|t|u)' \
@@ -157,19 +158,58 @@ grep -Fq 'def transform_resource(lines: list[str]) -> list[str]:' "$SPECIALIZER"
 grep -Fq 'def transform_script_v6(lines: list[str]) -> list[str]:' "$SPECIALIZER"
 grep -Fq 'resource post-expire probe' "$SPECIALIZER"
 grep -Fq 'resource eviction' "$SPECIALIZER"
-grep -Fq 'sound 633 transition recovery' "$SPECIALIZER"
-grep -Fq '"sound-633-stop"' "$SPECIALIZER"
-grep -Fq 'idx == 633' "$SPECIALIZER"
-grep -Fq 'size >= 512 * 1024' "$SPECIALIZER"
-grep -Fq '_vm->_sound->stopAllSounds();' "$SPECIALIZER"
-grep -Fq 'large sound allocation recovery' "$SPECIALIZER"
-grep -Fq '"large-sound-purge"' "$SPECIALIZER"
-grep -Fq '"large-sound-evict"' "$SPECIALIZER"
-grep -Fq '"large-sound-retry"' "$SPECIALIZER"
-grep -Fq '"large-sound-retry-ok"' "$SPECIALIZER"
-grep -Fq 'ft64SoundId-- > 0' "$SPECIALIZER"
-grep -Fq '!_vm->isResourceInUse(rtSound, ft64SoundId)' "$SPECIALIZER"
-grep -Fq 'nukeResource(rtSound, ft64SoundId);' "$SPECIALIZER"
+python3 - "$SPECIALIZER" <<'PYV17'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+compile(text, str(path), "exec")
+required = [
+    "v17 sound 633 transition reclaim",
+    "v17 reusable large sound arena",
+    "v17 large sound arena allocation",
+    '"sound-633-stop"',
+    "const ResId ft64PreviousSoundId = 622;",
+    '"sound-622-inactive"',
+    '"sound-622-unlock"',
+    '"sound-622-evict"',
+    "static byte *ft64LargeSoundArena = NULL;",
+    "static uint32 ft64LargeSoundArenaCapacity = 0;",
+    "ft64IsLargeSoundArenaAddress",
+    "ft64ArenaCanReuse",
+    '"large-sound-arena-create"',
+    '"large-sound-arena-use"',
+    '"large-sound-arena-reuse"',
+    '"large-sound-arena-busy"',
+    '"large-sound-heap-fallback"',
+    "ft64ArenaReserve = 0x1A4000;",
+    "_allocatedSize += size;",
+    "_allocatedSize -= _types[type][idx]._size;",
+]
+missing = [token for token in required if token not in text]
+if missing:
+    print("[preflight] missing v17 specializer tokens:", file=sys.stderr)
+    for token in missing:
+        print(f"  - {token}", file=sys.stderr)
+    raise SystemExit(1)
+forbidden = [
+    "sound 633 transition recovery",
+    "large sound allocation recovery",
+    "ptr == NULL && type == rtSound",
+    "large-sound-purge",
+    "large-sound-retry",
+    "ft64LargeSoundArenaAccounted",
+    "_allocatedSize += ft64LargeSoundArenaCapacity",
+]
+found = [token for token in forbidden if token in text]
+if found:
+    print("[preflight] obsolete specializer tokens remain:", file=sys.stderr)
+    for token in found:
+        print(f"  - {token}", file=sys.stderr)
+    raise SystemExit(1)
+print("[preflight] v17 large-sound arena structure OK")
+PYV17
 grep -Fq 'video opcode intent diagnostic' "$SPECIALIZER"
 grep -Fq 'SMUSH opcode diagnostic' "$SPECIALIZER"
 grep -Fq 'INSANE opcode diagnostic' "$SPECIALIZER"
@@ -197,11 +237,11 @@ echo "[preflight] established libdragon build contract"
 grep -Fq -- '-DN64_FT_ONLY' backend/Makefile.libdragon
 grep -Fq -- '-DDISABLE_HELP' backend/Makefile.libdragon
 grep -Fq -- '-DDISABLE_TOWNS_DUAL_LAYER_MODE' backend/Makefile.libdragon
-grep -Fq 'N64_ROM_TITLE := "FT64 R2V V15"' backend/Makefile.libdragon
+grep -Fq 'N64_ROM_TITLE := "FT64 R2V V17"' backend/Makefile.libdragon
 grep -Fq 'N64_ROM_CONTROLLER1 := n64' backend/Makefile.libdragon
 grep -Fq 'N64_ROM_CONTROLLER1=n64' probe/Makefile
-grep -Fq 'N64_ROM_TITLE="FT64 R2V V15 PROBE"' probe/Makefile
-grep -Fq 'all: ft64-sd-probe-r2v-v15.z64' probe/Makefile
+grep -Fq 'N64_ROM_TITLE="FT64 R2V V17 PROBE"' probe/Makefile
+grep -Fq 'all: ft64-sd-probe-r2v-v17.z64' probe/Makefile
 grep -Fq 'N64_CXXFLAGS := $(filter-out -Werror -std=gnu++17,$(N64_CXXFLAGS)) -std=gnu++11' backend/Makefile.libdragon
 grep -Fq 'CFLAGS :=' backend/Makefile.libdragon
 grep -Fq 'CXXFLAGS := -fno-rtti -fno-exceptions' backend/Makefile.libdragon
@@ -316,7 +356,7 @@ grep -Fq 'id: scummvm' "$WORKFLOW"
 grep -Fq 'make -C "$PORT" V=1' scripts/build_scummvm.sh
 grep -Fq 'tee "$ART/scummvm-build.log"' scripts/build_scummvm.sh
 grep -Fq 'tee "$ART/probe-build.log"' scripts/build_probe.sh
-grep -Fq 'full-throttle-n64-r2v-v15.elf' scripts/build_scummvm.sh
+grep -Fq 'full-throttle-n64-r2v-v17.elf' scripts/build_scummvm.sh
 grep -Fq 'mips64-elf-size -A "$ELF"' scripts/build_scummvm.sh
 grep -Fq 'mips64-elf-readelf -S -W "$ELF"' scripts/build_scummvm.sh
 grep -Fq 'mips64-elf-nm -S -n --defined-only "$ELF"' scripts/build_scummvm.sh
@@ -324,7 +364,7 @@ grep -Fq 'r2v-largest-400-symbols.txt' scripts/build_scummvm.sh
 grep -Fq 'r2v-static-memory-summary.txt' scripts/build_scummvm.sh
 grep -Fq 'r2v-size-comparison.txt' scripts/build_scummvm.sh
 grep -Fq 'r2v-pruned-symbol-audit.txt' scripts/build_scummvm.sh
-grep -Fq 'full-throttle-n64-r2v-v15.map' scripts/build_scummvm.sh
+grep -Fq 'full-throttle-n64-r2v-v17.map' scripts/build_scummvm.sh
 
 echo "[preflight] integration evidence gates"
 grep -Fq 'git -C "$SCUMMVM" apply --check --verbose "$PATCH"' scripts/integrate_backend.sh

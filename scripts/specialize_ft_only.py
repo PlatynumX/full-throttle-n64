@@ -661,66 +661,226 @@ def transform_resource(lines: list[str]) -> list[str]:
     sound633_create = find_unique_line(
         lines,
         "byte *ResourceManager::createResource(ResType type, ResId idx, uint32 size) {",
-        "sound 633 transition recovery",
+        "v17 sound 633 transition reclaim",
     )
     _, sound633_create_end = find_braced_region(
-        lines, sound633_create, "sound 633 transition recovery"
+        lines, sound633_create, "v17 sound 633 transition reclaim"
     )
     sound633_expire = find_unique_line(
         lines,
         "expireResources(size);",
-        "sound 633 transition recovery",
+        "v17 sound 633 transition reclaim",
         start=sound633_create,
         end=sound633_create_end,
     )
     lines[sound633_expire:sound633_expire] = [
         "#ifdef N64_FT_ONLY",
-        "// FT64 r2v structural: sound 633 transition recovery",
+        "// FT64 r2v structural: v17 sound 633 transition reclaim",
         "\tif (type == rtSound && idx == 633 && size >= 512 * 1024 && _vm->_sound) {",
         "\t\t::ft64_diag_resource_event(\"sound-633-stop\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, 0, -1);",
         "\t\t_vm->_sound->stopAllSounds();",
+        "\t\tconst ResId ft64PreviousSoundId = 622;",
+        "\t\tif ((uint)ft64PreviousSoundId < (uint)_types[rtSound].size()) {",
+        "\t\t\tResource &ft64PreviousSound = _types[rtSound][ft64PreviousSoundId];",
+        "\t\t\tif (ft64PreviousSound._address) {",
+        "\t\t\t\tconst bool ft64PreviousInUse = _vm->isResourceInUse(rtSound, ft64PreviousSoundId);",
+        "\t\t\t\t::ft64_diag_resource_event(ft64PreviousInUse ? \"sound-622-still-in-use\" : \"sound-622-inactive\", nameOfResType(rtSound), (int)rtSound, (int)ft64PreviousSoundId, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64PreviousSound._size, (int)ft64PreviousSound.getResourceCounter());",
+        "\t\t\t\tif (!ft64PreviousInUse && !ft64PreviousSound.isOffHeap()) {",
+        "\t\t\t\t\tif (ft64PreviousSound.isLocked()) {",
+        "\t\t\t\t\t\t::ft64_diag_resource_event(\"sound-622-unlock\", nameOfResType(rtSound), (int)rtSound, (int)ft64PreviousSoundId, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64PreviousSound._size, (int)ft64PreviousSound.getResourceCounter());",
+        "\t\t\t\t\t\tft64PreviousSound.unlock();",
+        "\t\t\t\t\t}",
+        "\t\t\t\t\t::ft64_diag_resource_event(\"sound-622-evict\", nameOfResType(rtSound), (int)rtSound, (int)ft64PreviousSoundId, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64PreviousSound._size, (int)ft64PreviousSound.getResourceCounter());",
+        "\t\t\t\t\tnukeResource(rtSound, ft64PreviousSoundId);",
+        "\t\t\t\t}",
+        "\t\t\t}",
+        "\t\t}",
         "\t}",
         "#endif",
     ]
+
+    arena_define = find_unique_line(
+        lines,
+        "#define SAFETY_AREA 2",
+        "v17 reusable large sound arena",
+    )
+    lines[arena_define + 1:arena_define + 1] = [
+        "#ifdef N64_FT_ONLY",
+        "// FT64 r2v structural: v17 reusable large sound arena",
+        "static byte *ft64LargeSoundArena = NULL;",
+        "static uint32 ft64LargeSoundArenaCapacity = 0;",
+        "static bool ft64LargeSoundArenaEverUsed = false;",
+        "static bool ft64IsLargeSoundArenaAddress(const byte *ptr) {",
+        "\treturn ptr != NULL && ptr == ft64LargeSoundArena;",
+        "}",
+        "#endif",
+    ]
+
+    resource_destructor = find_unique_line(
+        lines,
+        "ResourceManager::Resource::~Resource() {",
+        "v17 arena-safe resource destructor",
+    )
+    _, resource_destructor_end = find_braced_region(
+        lines, resource_destructor, "v17 arena-safe resource destructor"
+    )
+    resource_destructor_delete = find_unique_line(
+        lines,
+        "delete[] _address;",
+        "v17 arena-safe resource destructor",
+        start=resource_destructor,
+        end=resource_destructor_end,
+    )
+    lines[resource_destructor_delete:resource_destructor_delete + 1] = [
+        "#ifdef N64_FT_ONLY",
+        "\tif (!ft64IsLargeSoundArenaAddress(_address))",
+        "\t\tdelete[] _address;",
+        "#else",
+        "\tdelete[] _address;",
+        "#endif",
+    ]
+
+    resource_nuke = find_unique_line(
+        lines,
+        "void ResourceManager::Resource::nuke() {",
+        "v17 arena-safe resource nuke",
+    )
+    _, resource_nuke_end = find_braced_region(
+        lines, resource_nuke, "v17 arena-safe resource nuke"
+    )
+    resource_nuke_delete = find_unique_line(
+        lines,
+        "delete[] _address;",
+        "v17 arena-safe resource nuke",
+        start=resource_nuke,
+        end=resource_nuke_end,
+    )
+    lines[resource_nuke_delete:resource_nuke_delete + 1] = [
+        "#ifdef N64_FT_ONLY",
+        "\tif (!ft64IsLargeSoundArenaAddress(_address))",
+        "\t\tdelete[] _address;",
+        "#else",
+        "\tdelete[] _address;",
+        "#endif",
+    ]
+
+    manager_destructor = find_unique_line(
+        lines,
+        "ResourceManager::~ResourceManager() {",
+        "v17 arena shutdown release",
+    )
+    _, manager_destructor_end = find_braced_region(
+        lines, manager_destructor, "v17 arena shutdown release"
+    )
+    manager_free_resources = find_unique_line(
+        lines,
+        "freeResources();",
+        "v17 arena shutdown release",
+        start=manager_destructor,
+        end=manager_destructor_end,
+    )
+    lines[manager_free_resources + 1:manager_free_resources + 1] = [
+        "#ifdef N64_FT_ONLY",
+        "\tdelete[] ft64LargeSoundArena;",
+        "\tft64LargeSoundArena = NULL;",
+        "\tft64LargeSoundArenaCapacity = 0;",
+        "\tft64LargeSoundArenaEverUsed = false;",
+        "#endif",
+    ]
+
     large_sound_create = find_unique_line(
         lines,
         "byte *ResourceManager::createResource(ResType type, ResId idx, uint32 size) {",
-        "large sound allocation recovery",
+        "v17 large sound arena allocation",
     )
     _, large_sound_create_end = find_braced_region(
-        lines, large_sound_create, "large sound allocation recovery"
+        lines, large_sound_create, "v17 large sound arena allocation"
+    )
+    large_sound_expire = find_unique_line(
+        lines,
+        "expireResources(size);",
+        "v17 arena-aware resource expiry",
+        start=large_sound_create,
+        end=large_sound_create_end,
+    )
+    lines[large_sound_expire:large_sound_expire + 1] = [
+        "#ifdef N64_FT_ONLY",
+        "\tconst bool ft64ArenaEligible = type == rtSound && size >= 512 * 1024;",
+        "\tconst bool ft64ArenaCanReuse = ft64ArenaEligible && ft64LargeSoundArena && size + SAFETY_AREA <= ft64LargeSoundArenaCapacity;",
+        "\tif (!ft64ArenaCanReuse)",
+        "\t\texpireResources(size);",
+        "#else",
+        "\texpireResources(size);",
+        "#endif",
+    ]
+
+    large_sound_create = find_unique_line(
+        lines,
+        "byte *ResourceManager::createResource(ResType type, ResId idx, uint32 size) {",
+        "v17 large sound arena allocation boundary",
+    )
+    _, large_sound_create_end = find_braced_region(
+        lines, large_sound_create, "v17 large sound arena allocation boundary"
     )
     large_sound_alloc = find_unique_line(
         lines,
         "byte *ptr = new byte[size + SAFETY_AREA];",
-        "large sound allocation recovery",
+        "v17 large sound arena allocation",
         start=large_sound_create,
         end=large_sound_create_end,
     )
-    lines[large_sound_alloc + 1:large_sound_alloc + 1] = [
+    lines[large_sound_alloc:large_sound_alloc + 1] = [
         "#ifdef N64_FT_ONLY",
-        "// FT64 r2v structural: large sound allocation recovery",
-        "\tif (ptr == NULL && type == rtSound && size >= 512 * 1024 && _vm->_sound) {",
-        "\t\t::ft64_diag_resource_event(\"large-sound-purge\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, 0, -1);",
-        "\t\t_vm->_sound->stopAllSounds();",
-        "\t\tuint32 ft64PurgedBytes = 0;",
-        "\t\tint ft64PurgedCount = 0;",
-        "\t\tResId ft64SoundId = _types[rtSound].size();",
-        "\t\twhile (ft64SoundId-- > 0) {",
-        "\t\t\tif (ft64SoundId == idx)",
-        "\t\t\t\tcontinue;",
-        "\t\t\tResource &ft64Sound = _types[rtSound][ft64SoundId];",
-        "\t\t\tif (!ft64Sound.isLocked() && ft64Sound._address && !_vm->isResourceInUse(rtSound, ft64SoundId) && !ft64Sound.isOffHeap()) {",
-        "\t\t\t\t::ft64_diag_resource_event(\"large-sound-evict\", nameOfResType(rtSound), (int)rtSound, (int)ft64SoundId, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64Sound._size, (int)ft64Sound.getResourceCounter());",
-        "\t\t\t\tft64PurgedBytes += ft64Sound._size;",
-        "\t\t\t\t++ft64PurgedCount;",
-        "\t\t\t\tnukeResource(rtSound, ft64SoundId);",
-        "\t\t\t}",
+        "// FT64 r2v structural: v17 large sound arena allocation",
+        "\tbyte *ptr = NULL;",
+        "\tif (ft64ArenaEligible) {",
+        "\t\tconst uint32 ft64ArenaNeeded = size + SAFETY_AREA;",
+        "\t\tif (!ft64LargeSoundArena) {",
+        "\t\t\tuint32 ft64ArenaReserve = 0x1A4000;",
+        "\t\t\tif (ft64ArenaReserve < ft64ArenaNeeded)",
+        "\t\t\t\tft64ArenaReserve = ft64ArenaNeeded;",
+        "\t\t\tft64LargeSoundArena = new byte[ft64ArenaReserve];",
+        "\t\t\tif (ft64LargeSoundArena)",
+        "\t\t\t\tft64LargeSoundArenaCapacity = ft64ArenaReserve;",
+        "\t\t\t::ft64_diag_resource_event(ft64LargeSoundArena ? \"large-sound-arena-create\" : \"large-sound-arena-create-failed\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64LargeSoundArenaCapacity, -1);",
         "\t\t}",
-        "\t\t::ft64_diag_resource_event(\"large-sound-retry\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64PurgedBytes, ft64PurgedCount);",
-        "\t\tptr = new byte[size + SAFETY_AREA];",
-        "\t\t::ft64_diag_resource_event(ptr ? \"large-sound-retry-ok\" : \"large-sound-retry-failed\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64PurgedBytes, ft64PurgedCount);",
+        "\t\tif (ft64LargeSoundArena && ft64ArenaNeeded <= ft64LargeSoundArenaCapacity) {",
+        "\t\t\tint ft64ArenaOwner = -1;",
+        "\t\t\tfor (uint ft64SoundId = 0; ft64SoundId < (uint)_types[rtSound].size(); ++ft64SoundId) {",
+        "\t\t\t\tif (_types[rtSound][ft64SoundId]._address == ft64LargeSoundArena) {",
+        "\t\t\t\t\tft64ArenaOwner = (int)ft64SoundId;",
+        "\t\t\t\t\tbreak;",
+        "\t\t\t\t}",
+        "\t\t\t}",
+        "\t\t\tif (ft64ArenaOwner >= 0 && ft64ArenaOwner != (int)idx) {",
+        "\t\t\t\tResource &ft64OldArenaSound = _types[rtSound][ft64ArenaOwner];",
+        "\t\t\t\tif (!ft64OldArenaSound.isLocked() && !_vm->isResourceInUse(rtSound, (ResId)ft64ArenaOwner)) {",
+        "\t\t\t\t\t::ft64_diag_resource_event(\"large-sound-arena-reclaim\", nameOfResType(rtSound), (int)rtSound, ft64ArenaOwner, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64OldArenaSound._size, (int)ft64OldArenaSound.getResourceCounter());",
+        "\t\t\t\t\tnukeResource(rtSound, (ResId)ft64ArenaOwner);",
+        "\t\t\t\t\tft64ArenaOwner = -1;",
+        "\t\t\t\t}",
+        "\t\t\t}",
+        "\t\t\tif (ft64ArenaOwner < 0) {",
+        "\t\t\t\tptr = ft64LargeSoundArena;",
+        "\t\t\t\t::ft64_diag_resource_event(ft64LargeSoundArenaEverUsed ? \"large-sound-arena-reuse\" : \"large-sound-arena-use\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64LargeSoundArenaCapacity, -1);",
+        "\t\t\t\tft64LargeSoundArenaEverUsed = true;",
+        "\t\t\t} else {",
+        "\t\t\t\tResource &ft64BusyArenaSound = _types[rtSound][ft64ArenaOwner];",
+        "\t\t\t\t::ft64_diag_resource_event(\"large-sound-arena-busy\", nameOfResType(rtSound), (int)rtSound, ft64ArenaOwner, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64BusyArenaSound._size, (int)ft64BusyArenaSound.getResourceCounter());",
+        "\t\t\t}",
+        "\t\t} else if (ft64LargeSoundArena) {",
+        "\t\t\t::ft64_diag_resource_event(\"large-sound-arena-too-small\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64LargeSoundArenaCapacity, -1);",
+        "\t\t}",
         "\t}",
+        "\tif (!ptr) {",
+        "\t\tif (ft64ArenaCanReuse)",
+        "\t\t\texpireResources(size);",
+        "\t\tptr = new byte[size + SAFETY_AREA];",
+        "\t\tif (ft64ArenaEligible)",
+        "\t\t\t::ft64_diag_resource_event(ptr ? \"large-sound-heap-fallback\" : \"large-sound-heap-fallback-failed\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64LargeSoundArenaCapacity, -1);",
+        "\t}",
+        "#else",
+        "\tbyte *ptr = new byte[size + SAFETY_AREA];",
         "#endif",
     ]
     return lines
@@ -831,8 +991,9 @@ EXPECTED_MARKERS = {
         "resource no-candidate",
         "resource eviction",
         "resource expiration complete",
-        "sound 633 transition recovery",
-        "large sound allocation recovery",
+        "v17 sound 633 transition reclaim",
+        "v17 reusable large sound arena",
+        "v17 large sound arena allocation",
     ],
     "engines/scumm/script_v6.cpp": [
         "video opcode diagnostic bridge",
@@ -887,20 +1048,30 @@ def verify_outputs(outputs: dict[str, list[str]]) -> None:
         (script_v6, '"pending"', "video opcode intent"),
         (script_v6, "vm.slot[_currentScript].number", "video script id"),
         (script_v6, '"INSANE"', "INSANE video marker"),
-        (resource, '"sound-633-stop"', "Sound 633 recovery event"),
+        (resource, '"sound-633-stop"', "Sound 633 transition event"),
         (resource, "type == rtSound && idx == 633", "Sound 633 resource gate"),
-        (resource, "size >= 512 * 1024", "Sound 633 large-allocation gate"),
-        (resource, "_vm->_sound->stopAllSounds();", "Sound 633 iMUSE release"),
-        (resource, "large sound allocation recovery", "large-sound recovery marker"),
-        (resource, '"large-sound-purge"', "large-sound purge event"),
-        (resource, '"large-sound-evict"', "large-sound eviction event"),
-        (resource, '"large-sound-retry"', "large-sound retry event"),
-        (resource, '"large-sound-retry-ok"', "large-sound success event"),
-        (resource, "ft64SoundId-- > 0", "inactive sound scan"),
-        (resource, "!ft64Sound.isLocked()", "sound lock guard"),
-        (resource, "!_vm->isResourceInUse(rtSound, ft64SoundId)", "sound in-use guard"),
-        (resource, "!ft64Sound.isOffHeap()", "sound off-heap guard"),
-        (resource, "nukeResource(rtSound, ft64SoundId);", "inactive sound release"),
+        (resource, "const ResId ft64PreviousSoundId = 622;", "Sound 622 transition target"),
+        (resource, '"sound-622-still-in-use"', "Sound 622 in-use refusal event"),
+        (resource, '"sound-622-inactive"', "Sound 622 inactive event"),
+        (resource, '"sound-622-unlock"', "Sound 622 stale-lock release event"),
+        (resource, '"sound-622-evict"', "Sound 622 eviction event"),
+        (resource, "!ft64PreviousInUse && !ft64PreviousSound.isOffHeap()", "Sound 622 safe eviction gate"),
+        (resource, "ft64PreviousSound.unlock();", "Sound 622 stale-lock release"),
+        (resource, "nukeResource(rtSound, ft64PreviousSoundId);", "Sound 622 release"),
+        (resource, "static byte *ft64LargeSoundArena = NULL;", "large-sound arena storage"),
+        (resource, "static uint32 ft64LargeSoundArenaCapacity = 0;", "large-sound arena capacity"),
+        (resource, "ft64IsLargeSoundArenaAddress", "arena ownership test"),
+        (resource, "ft64ArenaCanReuse", "arena-aware expiry gate"),
+        (resource, '"large-sound-arena-create"', "arena creation event"),
+        (resource, '"large-sound-arena-use"', "arena first-use event"),
+        (resource, '"large-sound-arena-reuse"', "arena reuse event"),
+        (resource, '"large-sound-arena-busy"', "arena busy refusal event"),
+        (resource, '"large-sound-heap-fallback"', "large-sound heap fallback event"),
+        (resource, "if (!ft64IsLargeSoundArenaAddress(_address))", "arena-safe delete guard"),
+        (resource, "delete[] ft64LargeSoundArena;", "arena shutdown release"),
+        (resource, "ft64ArenaReserve = 0x1A4000;", "minimum arena reserve"),
+        (resource, "_allocatedSize += size;", "original active-resource accounting"),
+        (resource, "_allocatedSize -= _types[type][idx]._size;", "original resource release accounting"),
     ]
     for text, needle, label in required:
         if needle not in text:
