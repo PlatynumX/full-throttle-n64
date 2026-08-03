@@ -6,6 +6,7 @@ cd "$ROOT"
 
 WORKFLOW=".github/workflows/build-full-throttle-r2v.yml"
 PATCH="upstream/scummvm-1.6.0-ft64.patch"
+VERIFIER="scripts/verify_v17_resource.py"
 
 echo "[preflight] shell syntax"
 for f in scripts/*.sh; do
@@ -23,6 +24,7 @@ for f in \
     backend/nintendo64_libdragon.cpp \
     probe/Makefile \
     probe/sd_probe.c \
+    "$VERIFIER" \
     "$PATCH"; do
     test -f "$f"
 done
@@ -109,6 +111,7 @@ import sys
 source = Path(sys.argv[1]).read_bytes()
 compile(source, sys.argv[1], "exec")
 PYCOMPILE
+python3 -c 'from pathlib import Path; import sys; compile(Path(sys.argv[1]).read_bytes(), sys.argv[1], "exec")' "$VERIFIER"
 # Validate the specializer by syntax and required structural behavior below,
 # not by a copied digest that must be rewritten whenever the script changes.
 
@@ -372,7 +375,16 @@ grep -Fq 'git -C "$SCUMMVM" apply --check --verbose "$PATCH"' scripts/integrate_
 grep -Fq 'python3 "$SPECIALIZER" --check "$SCUMMVM"' scripts/integrate_backend.sh
 grep -Fq 'python3 "$SPECIALIZER" --apply "$SCUMMVM"' scripts/integrate_backend.sh
 grep -Fq 'python3 "$SPECIALIZER" --verify "$SCUMMVM"' scripts/integrate_backend.sh
+grep -Fq 'VERIFIER="$ROOT/scripts/verify_v17_resource.py"' scripts/integrate_backend.sh
+grep -Fq 'python3 "$VERIFIER" "$SCUMMVM/engines/scumm/resource.cpp"' scripts/integrate_backend.sh
 grep -Fq 'git -C "$SCUMMVM" diff --check' scripts/integrate_backend.sh
+if grep -Fq 'FT64 r2v structural: sound 633 transition recovery' scripts/integrate_backend.sh || \
+   grep -Fq 'FT64 r2v structural: large sound allocation recovery' scripts/integrate_backend.sh || \
+   grep -Fq '"large-sound-purge"' scripts/integrate_backend.sh || \
+   grep -Fq '"large-sound-retry"' scripts/integrate_backend.sh; then
+    echo "stale v15 generated-resource assertions remain in integrator" >&2
+    exit 1
+fi
 grep -Fq 'smush-header-before.txt' scripts/integrate_backend.sh
 grep -Fq 'base-main-before.txt' scripts/integrate_backend.sh
 grep -Fq 'scumm-detection-before.txt' scripts/integrate_backend.sh
