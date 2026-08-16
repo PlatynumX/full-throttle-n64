@@ -218,7 +218,12 @@ void OSystem_N64Libdragon::initBackend() {
     ConfMan.setBool("FM_high_quality", false);
     ConfMan.setBool("FM_medium_quality", true);
 
-    _savefileManager = new DefaultSaveFileManager("sd:/fullthrottle/saves");
+    // The pinned SummerCart FAT adapter cannot create directories at runtime.
+    // Keep savegames beside the Full Throttle data in the guaranteed-existing
+    // sd:/fullthrottle directory instead of depending on a precreated /saves.
+    ConfMan.set("savepath", "sd:/fullthrottle");
+    _savefileManager = new DefaultSaveFileManager("sd:/fullthrottle");
+    debugf("[FT64DIAG r2v] SAVE path=sd:/fullthrottle\n");
     ft64_diag_heap_marker("initBackend-save");
 
     _timerManager = new DefaultTimerManager();

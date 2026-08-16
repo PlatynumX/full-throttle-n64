@@ -180,7 +180,7 @@ python3 -m py_compile scripts/stream_ft_audio.py
 grep -Fq 'openFTSoundStream' scripts/stream_ft_audio.py
 grep -Fq '_fileHandle->getName()' scripts/stream_ft_audio.py
 grep -Fq "MKTAG('C','r','e','a')" scripts/stream_ft_audio.py
-grep -Fq 'kFT64StreamCacheSize = 16384' scripts/stream_ft_audio.py
+grep -Fq 'kFT64StreamCacheSize = 32768' scripts/stream_ft_audio.py
 grep -Fq '"stream-open-failed"' scripts/stream_ft_audio.py
 grep -Fq 'STREAMER="$ROOT/scripts/stream_ft_audio.py"' scripts/integrate_backend.sh
 grep -Fq 'python3 "$STREAMER" --check "$SCUMMVM"' scripts/integrate_backend.sh
@@ -286,7 +286,9 @@ fi
 
 echo "[preflight] SD filesystem and save path"
 grep -Fq 'debug_init_sdfs("sd:/", -1)' backend/osys_n64_libdragon.cpp
-grep -Fq 'DefaultSaveFileManager("sd:/fullthrottle/saves")' backend/osys_n64_libdragon.cpp
+grep -Fq 'ConfMan.set("savepath", "sd:/fullthrottle");' backend/osys_n64_libdragon.cpp
+grep -Fq 'DefaultSaveFileManager("sd:/fullthrottle")' backend/osys_n64_libdragon.cpp
+grep -Fq '[FT64DIAG r2v] SAVE path=sd:/fullthrottle' backend/osys_n64_libdragon.cpp
 grep -Fq '#include <dir.h>' backend/n64libdragon-fs.cpp
 grep -Fq 'dir_findfirst' backend/n64libdragon-fs.cpp
 if grep -RInE '<dirent\.h>|opendir\(|readdir\(|closedir\(|backends/fs/posix' backend probe; then
