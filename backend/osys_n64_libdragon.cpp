@@ -675,6 +675,16 @@ void OSystem_N64Libdragon::sampleAnalogMouse(const joypad_inputs_t &in) {
     int sx = in.stick_x;
     int sy = in.stick_y;
 
+    // D-pad backup for cursor movement and Full Throttle bike steering.
+    if (in.btn.d_left && !in.btn.d_right)
+        sx = -60;
+    else if (in.btn.d_right && !in.btn.d_left)
+        sx = 60;
+    if (in.btn.d_up && !in.btn.d_down)
+        sy = 60;
+    else if (in.btn.d_down && !in.btn.d_up)
+        sy = -60;
+
     // Match the historical ScummVM N64 backend's controller curve. It clamps
     // the useful N64 stick range to +/-60, applies a one-unit deadzone, and
     // uses tangent acceleration. That backend sampled this from VI cadence.
@@ -745,13 +755,21 @@ bool OSystem_N64Libdragon::pollEvent(Common::Event &event) {
 
     const joypad_buttons_t buttons = _joypadInput.btn;
 
-    if (buttons.z != _lastButtons.z) {
-        event.type = buttons.z ? Common::EVENT_LBUTTONDOWN : Common::EVENT_LBUTTONUP;
+    // Primary action: A is the natural face-button action; Z remains an
+    // alternate trigger-style primary. Treat both as one logical left mouse
+    // button so one cannot generate a release while the other is held.
+    const bool primary = buttons.a || buttons.z;
+    const bool lastPrimary = _lastButtons.a || _lastButtons.z;
+    if (primary != lastPrimary) {
+        event.type = primary ? Common::EVENT_LBUTTONDOWN : Common::EVENT_LBUTTONUP;
         event.mouse.x = _mouseX;
         event.mouse.y = _mouseY;
         _lastButtons = buttons;
         return true;
     }
+
+    // Secondary/right mouse. Full Throttle's first scripted bike fight uses
+    // this input path.
     if (buttons.b != _lastButtons.b) {
         event.type = buttons.b ? Common::EVENT_RBUTTONDOWN : Common::EVENT_RBUTTONUP;
         event.mouse.x = _mouseX;
@@ -759,6 +777,7 @@ bool OSystem_N64Libdragon::pollEvent(Common::Event &event) {
         _lastButtons = buttons;
         return true;
     }
+
     if (buttons.start != _lastButtons.start) {
         keyEvent(event,
                  buttons.start ? Common::EVENT_KEYDOWN : Common::EVENT_KEYUP,
@@ -766,6 +785,7 @@ bool OSystem_N64Libdragon::pollEvent(Common::Event &event) {
         _lastButtons = buttons;
         return true;
     }
+
     if (buttons.l != _lastButtons.l) {
         keyEvent(event,
                  buttons.l ? Common::EVENT_KEYDOWN : Common::EVENT_KEYUP,
@@ -773,9 +793,11 @@ bool OSystem_N64Libdragon::pollEvent(Common::Event &event) {
         _lastButtons = buttons;
         return true;
     }
-    if (buttons.a != _lastButtons.a) {
+
+    // SCUMM '.' skips the current spoken line.
+    if (buttons.r != _lastButtons.r) {
         keyEvent(event,
-                 buttons.a ? Common::EVENT_KEYDOWN : Common::EVENT_KEYUP,
+                 buttons.r ? Common::EVENT_KEYDOWN : Common::EVENT_KEYUP,
                  Common::KEYCODE_PERIOD, '.');
         _lastButtons = buttons;
         return true;
