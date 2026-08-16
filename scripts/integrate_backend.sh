@@ -41,7 +41,7 @@ for rel in \
     cp "$SCUMMVM/$rel" "$ART/pristine-source/$rel"
 done
 
-# Preserve the exact pristine files touched by v19 streaming.
+# Preserve pristine v20 stream-touched files.
 for rel in \
     engines/scumm/scumm.h \
     engines/scumm/sound.cpp \
@@ -86,9 +86,9 @@ python3 "$SPECIALIZER" --check "$SCUMMVM"
 echo "[integrate] applying structural Full Throttle-only source specialization"
 python3 "$SPECIALIZER" --apply "$SCUMMVM"
 python3 "$SPECIALIZER" --verify "$SCUMMVM"
-echo "[integrate] checking large Full Throttle iMUS streaming specialization"
+echo "[integrate] checking v20 universal Full Throttle audio streaming"
 python3 "$STREAMER" --check "$SCUMMVM"
-echo "[integrate] applying large Full Throttle iMUS streaming specialization"
+echo "[integrate] applying v20 universal Full Throttle audio streaming"
 python3 "$STREAMER" --apply "$SCUMMVM"
 python3 "$STREAMER" --verify "$SCUMMVM"
 git -C "$SCUMMVM" diff --check
@@ -160,7 +160,7 @@ sed -n '20,60p;2378,2445p' "$SCUMMVM/engines/scumm/script_v6.cpp" > "$ART/scumm-
 grep -n 'FT64 r2v structural: resource' "$SCUMMVM/engines/scumm/resource.cpp" > "$ART/resource-diagnostic-markers.txt"
 grep -n 'FT64 r2v structural: .*opcode diagnostic' "$SCUMMVM/engines/scumm/script_v6.cpp" > "$ART/video-opcode-diagnostic-markers.txt"
 
-# Preserve and prove the v19 generated streaming source.
+# Preserve and prove generated v20 streaming source.
 for rel in \
     engines/scumm/scumm.h \
     engines/scumm/sound.cpp \
@@ -169,22 +169,19 @@ for rel in \
     mkdir -p "$ART/patched-source/$(dirname "$rel")"
     cp "$SCUMMVM/$rel" "$ART/patched-source/$rel"
 done
-grep -n 'FT64 r2v structural: v19 large iMUS streaming' \
+grep -n "FT64 r2v structural: v20 universal FT audio streaming" \
     "$SCUMMVM/engines/scumm/scumm.h" \
     "$SCUMMVM/engines/scumm/sound.cpp" \
     "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.h" \
     "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp" \
-    > "$ART/v19-streaming-markers.txt"
-grep -Fq 'openFTLargeSoundStream' "$SCUMMVM/engines/scumm/sound.cpp"
-grep -Fq 'prepareSoundFromFTStream' "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
-grep -Fq '"stream-open"' "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
-grep -Fq '"stream-close"' "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
-if grep -Fq 'ft64LargeSoundArena' "$SCUMMVM/engines/scumm/resource.cpp"; then
-    echo 'arena code leaked into v19 generated resource.cpp' >&2
-    exit 1
-fi
-if grep -Fq 'sound-633-stop' "$SCUMMVM/engines/scumm/resource.cpp"; then
-    echo 'forced Sound-633 recovery leaked into v19 generated resource.cpp' >&2
+    > "$ART/v20-streaming-markers.txt"
+grep -Fq "_fileHandle->getName()" "$SCUMMVM/engines/scumm/sound.cpp"
+grep -Fq "kFT64StreamCacheSize = 16384" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
+grep -Fq "MKTAG('C','r','e','a')" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
+grep -Fq "\"stream-open\"" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
+grep -Fq "\"stream-open-failed\"" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
+if grep -Eq "ft64LargeSoundArena|sound-633-stop|size >= 512 [*] 1024|fullSize < 512 [*] 1024" "$SCUMMVM/engines/scumm/resource.cpp" "$SCUMMVM/engines/scumm/sound.cpp" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"; then
+    echo "legacy arena/threshold recovery leaked into v20 generated source" >&2
     exit 1
 fi
 # Install the hardware-proven libdragon backend as complete source files.

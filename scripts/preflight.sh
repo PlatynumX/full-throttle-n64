@@ -47,12 +47,12 @@ test ! -e .github/workflows/build-full-throttle-r2q.yml
 test ! -e .github/workflows/build-full-throttle-r2o.yml
 test ! -e .github/workflows/build-full-throttle-r2p.yml
 test ! -e .github/workflows/build-full-throttle-r2n.yml
-grep -Fqx 'name: Build Full Throttle N64 r2v v19' "$WORKFLOW"
-grep -Fq 'name: full-throttle-n64-r2v-v19-build-report' "$WORKFLOW"
-grep -Fq 'TARGET := full-throttle-n64-r2v-v19' backend/Makefile.libdragon
-grep -Fq 'full-throttle-n64-r2v-v19.z64' scripts/build_scummvm.sh
-grep -Fq 'ft64-sd-probe-r2v-v19.z64' scripts/build_probe.sh
-grep -Fq 'FULL THROTTLE N64 - r2v-v19' probe/sd_probe.c
+grep -Fqx 'name: Build Full Throttle N64 r2v v20' "$WORKFLOW"
+grep -Fq 'name: full-throttle-n64-r2v-v20-build-report' "$WORKFLOW"
+grep -Fq 'TARGET := full-throttle-n64-r2v-v20' backend/Makefile.libdragon
+grep -Fq 'full-throttle-n64-r2v-v20.z64' scripts/build_scummvm.sh
+grep -Fq 'ft64-sd-probe-r2v-v20.z64' scripts/build_probe.sh
+grep -Fq 'FULL THROTTLE N64 - r2v-v20' probe/sd_probe.c
 # Historical documentation may legitimately mention earlier revisions. Reject only
 # Active build/runtime identities must all be r2v. Historical docs may mention earlier releases.
 if grep -RInE --exclude=preflight.sh 'full-throttle-n64-r2(n|o|p|q|r|s|t|u)(\.z64|-build-report)|ft64-sd-probe-r2(n|o|p|q|r|s|t|u)|Build Full Throttle N64 r2(n|o|p|q|r|s|t|u)|FULL THROTTLE N64 - r2(n|o|p|q|r|s|t|u)' \
@@ -174,24 +174,20 @@ grep -Fq 'mode.add_argument("--apply"' "$SPECIALIZER"
 grep -Fq 'mode.add_argument("--verify"' "$SPECIALIZER"
 
 
-echo "[preflight] v19 large-iMUS streaming"
+echo "[preflight] v20 universal FT audio streaming"
 test -f scripts/stream_ft_audio.py
 python3 -m py_compile scripts/stream_ft_audio.py
-grep -Fq 'openFTLargeSoundStream' scripts/stream_ft_audio.py
-grep -Fq 'prepareSoundFromFTStream' scripts/stream_ft_audio.py
-grep -Fq '"stream-open"' scripts/stream_ft_audio.py
-grep -Fq '"stream-close"' scripts/stream_ft_audio.py
+grep -Fq 'openFTSoundStream' scripts/stream_ft_audio.py
+grep -Fq '_fileHandle->getName()' scripts/stream_ft_audio.py
+grep -Fq "MKTAG('C','r','e','a')" scripts/stream_ft_audio.py
+grep -Fq 'kFT64StreamCacheSize = 16384' scripts/stream_ft_audio.py
+grep -Fq '"stream-open-failed"' scripts/stream_ft_audio.py
 grep -Fq 'STREAMER="$ROOT/scripts/stream_ft_audio.py"' scripts/integrate_backend.sh
-grep -Fq '[sc64-push]' scripts/push_sc64_rom.sh
 grep -Fq 'python3 "$STREAMER" --check "$SCUMMVM"' scripts/integrate_backend.sh
 grep -Fq 'python3 "$STREAMER" --apply "$SCUMMVM"' scripts/integrate_backend.sh
 grep -Fq 'python3 "$STREAMER" --verify "$SCUMMVM"' scripts/integrate_backend.sh
-if grep -Fq 'ft64LargeSoundArena' scripts/specialize_ft_only.py; then
-    echo "arena code remains in v19 specializer" >&2
-    exit 1
-fi
-if grep -Fq 'sound-633-stop' scripts/specialize_ft_only.py; then
-    echo "forced Sound-633 recovery remains in v19 specializer" >&2
+if grep -Eq 'ft64LargeSoundArena|sound-633-stop' scripts/specialize_ft_only.py; then
+    echo "arena/forced Sound-633 code remains in v20 specializer" >&2
     exit 1
 fi
 echo "[preflight] Full Throttle-only build scope"
@@ -206,11 +202,11 @@ echo "[preflight] established libdragon build contract"
 grep -Fq -- '-DN64_FT_ONLY' backend/Makefile.libdragon
 grep -Fq -- '-DDISABLE_HELP' backend/Makefile.libdragon
 grep -Fq -- '-DDISABLE_TOWNS_DUAL_LAYER_MODE' backend/Makefile.libdragon
-grep -Fq 'N64_ROM_TITLE := "FT64 R2V V19"' backend/Makefile.libdragon
+grep -Fq 'N64_ROM_TITLE := "FT64 R2V V20"' backend/Makefile.libdragon
 grep -Fq 'N64_ROM_CONTROLLER1 := n64' backend/Makefile.libdragon
 grep -Fq 'N64_ROM_CONTROLLER1=n64' probe/Makefile
-grep -Fq 'N64_ROM_TITLE="FT64 R2V V19 PROBE"' probe/Makefile
-grep -Fq 'all: ft64-sd-probe-r2v-v19.z64' probe/Makefile
+grep -Fq 'N64_ROM_TITLE="FT64 R2V V20 PROBE"' probe/Makefile
+grep -Fq 'all: ft64-sd-probe-r2v-v20.z64' probe/Makefile
 grep -Fq 'N64_CXXFLAGS := $(filter-out -Werror -std=gnu++17,$(N64_CXXFLAGS)) -std=gnu++11' backend/Makefile.libdragon
 grep -Fq 'CFLAGS :=' backend/Makefile.libdragon
 grep -Fq 'CXXFLAGS := -fno-rtti -fno-exceptions' backend/Makefile.libdragon
@@ -325,7 +321,7 @@ grep -Fq 'id: scummvm' "$WORKFLOW"
 grep -Fq 'make -C "$PORT" V=1' scripts/build_scummvm.sh
 grep -Fq 'tee "$ART/scummvm-build.log"' scripts/build_scummvm.sh
 grep -Fq 'tee "$ART/probe-build.log"' scripts/build_probe.sh
-grep -Fq 'full-throttle-n64-r2v-v19.elf' scripts/build_scummvm.sh
+grep -Fq 'full-throttle-n64-r2v-v20.elf' scripts/build_scummvm.sh
 grep -Fq 'mips64-elf-size -A "$ELF"' scripts/build_scummvm.sh
 grep -Fq 'mips64-elf-readelf -S -W "$ELF"' scripts/build_scummvm.sh
 grep -Fq 'mips64-elf-nm -S -n --defined-only "$ELF"' scripts/build_scummvm.sh
@@ -333,7 +329,7 @@ grep -Fq 'r2v-largest-400-symbols.txt' scripts/build_scummvm.sh
 grep -Fq 'r2v-static-memory-summary.txt' scripts/build_scummvm.sh
 grep -Fq 'r2v-size-comparison.txt' scripts/build_scummvm.sh
 grep -Fq 'r2v-pruned-symbol-audit.txt' scripts/build_scummvm.sh
-grep -Fq 'full-throttle-n64-r2v-v19.map' scripts/build_scummvm.sh
+grep -Fq 'full-throttle-n64-r2v-v20.map' scripts/build_scummvm.sh
 
 echo "[preflight] integration evidence gates"
 grep -Fq 'git -C "$SCUMMVM" apply --check --verbose "$PATCH"' scripts/integrate_backend.sh
