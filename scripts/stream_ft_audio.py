@@ -375,7 +375,7 @@ bool ScummEngine::openFTSoundStream(ResId idx, ScummFile &file, uint32 &resource
     methods = r'''
 #ifdef N64_FT_ONLY
 // FT64 r2v structural: v20 universal FT audio streaming: buffered payload reader
-static const uint32 kFT64StreamCacheSize = 16384;
+static const uint32 kFT64StreamCacheSize = 32768;
 
 bool ImuseDigiSndMgr::readFTStreamCached(SoundDesc *sound, uint32 relative, byte *dst, uint32 size) {
 	if (!sound || !sound->streamFile || !sound->streamCache)
@@ -798,7 +798,7 @@ def verify(root: Path):
         "_fileHandle->getName()",
         "MKTAG('C','r','e','a')",
         "MKTAG('i','M','U','S')",
-        "kFT64StreamCacheSize = 16384",
+        "kFT64StreamCacheSize = 32768",
         "prepareSoundFromFTStream",
         "readFTStreamCached",
         '"stream-locate"',
