@@ -17,7 +17,7 @@ N64_CFLAGS := $(filter-out -Werror,$(N64_CFLAGS))
 N64_CXXFLAGS := $(filter-out -Werror -std=gnu++17,$(N64_CXXFLAGS)) -std=gnu++11
 
 # n64.mk defines defaults, so project-specific metadata must follow the include.
-N64_ROM_TITLE := "FT64 R2V V17"
+N64_ROM_TITLE := "FT64 R2V V18"
 N64_ROM_REGIONFREE := true
 N64_ROM_CONTROLLER1 := n64
 
@@ -83,7 +83,7 @@ FT64_GUI_ARCHIVE := gui/libgui.a
 OBJS := $(filter-out $(FT64_GUI_ARCHIVE),$(OBJS))
 OBJS := $(subst engines/libengines.a,engines/libengines.a $(FT64_GUI_ARCHIVE),$(OBJS))
 
-TARGET := full-throttle-n64-r2v-v17
+TARGET := full-throttle-n64-r2v-v18
 
 all: $(TARGET).z64
 

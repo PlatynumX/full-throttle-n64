@@ -661,21 +661,21 @@ def transform_resource(lines: list[str]) -> list[str]:
     sound633_create = find_unique_line(
         lines,
         "byte *ResourceManager::createResource(ResType type, ResId idx, uint32 size) {",
-        "v17 sound 633 transition reclaim",
+        "v18 sound 633 transition reclaim",
     )
     _, sound633_create_end = find_braced_region(
-        lines, sound633_create, "v17 sound 633 transition reclaim"
+        lines, sound633_create, "v18 sound 633 transition reclaim"
     )
     sound633_expire = find_unique_line(
         lines,
         "expireResources(size);",
-        "v17 sound 633 transition reclaim",
+        "v18 sound 633 transition reclaim",
         start=sound633_create,
         end=sound633_create_end,
     )
     lines[sound633_expire:sound633_expire] = [
         "#ifdef N64_FT_ONLY",
-        "// FT64 r2v structural: v17 sound 633 transition reclaim",
+        "// FT64 r2v structural: v18 sound 633 transition reclaim",
         "\tif (type == rtSound && idx == 633 && size >= 512 * 1024 && _vm->_sound) {",
         "\t\t::ft64_diag_resource_event(\"sound-633-stop\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, 0, -1);",
         "\t\t_vm->_sound->stopAllSounds();",
@@ -702,13 +702,14 @@ def transform_resource(lines: list[str]) -> list[str]:
     arena_define = find_unique_line(
         lines,
         "#define SAFETY_AREA 2",
-        "v17 reusable large sound arena",
+        "v18 reusable large sound arena",
     )
     lines[arena_define + 1:arena_define + 1] = [
         "#ifdef N64_FT_ONLY",
-        "// FT64 r2v structural: v17 reusable large sound arena",
-        "static byte *ft64LargeSoundArena = NULL;",
-        "static uint32 ft64LargeSoundArenaCapacity = 0;",
+        "// FT64 r2v structural: v18 reusable large sound arena",
+        "static byte ft64LargeSoundArenaStorage[0x1A4000] __attribute__((aligned(16)));",
+        "static byte *const ft64LargeSoundArena = ft64LargeSoundArenaStorage;",
+        "static const uint32 ft64LargeSoundArenaCapacity = sizeof(ft64LargeSoundArenaStorage);",
         "static bool ft64LargeSoundArenaEverUsed = false;",
         "static bool ft64IsLargeSoundArenaAddress(const byte *ptr) {",
         "\treturn ptr != NULL && ptr == ft64LargeSoundArena;",
@@ -719,15 +720,15 @@ def transform_resource(lines: list[str]) -> list[str]:
     resource_destructor = find_unique_line(
         lines,
         "ResourceManager::Resource::~Resource() {",
-        "v17 arena-safe resource destructor",
+        "v18 arena-safe resource destructor",
     )
     _, resource_destructor_end = find_braced_region(
-        lines, resource_destructor, "v17 arena-safe resource destructor"
+        lines, resource_destructor, "v18 arena-safe resource destructor"
     )
     resource_destructor_delete = find_unique_line(
         lines,
         "delete[] _address;",
-        "v17 arena-safe resource destructor",
+        "v18 arena-safe resource destructor",
         start=resource_destructor,
         end=resource_destructor_end,
     )
@@ -743,15 +744,15 @@ def transform_resource(lines: list[str]) -> list[str]:
     resource_nuke = find_unique_line(
         lines,
         "void ResourceManager::Resource::nuke() {",
-        "v17 arena-safe resource nuke",
+        "v18 arena-safe resource nuke",
     )
     _, resource_nuke_end = find_braced_region(
-        lines, resource_nuke, "v17 arena-safe resource nuke"
+        lines, resource_nuke, "v18 arena-safe resource nuke"
     )
     resource_nuke_delete = find_unique_line(
         lines,
         "delete[] _address;",
-        "v17 arena-safe resource nuke",
+        "v18 arena-safe resource nuke",
         start=resource_nuke,
         end=resource_nuke_end,
     )
@@ -767,23 +768,20 @@ def transform_resource(lines: list[str]) -> list[str]:
     manager_destructor = find_unique_line(
         lines,
         "ResourceManager::~ResourceManager() {",
-        "v17 arena shutdown release",
+        "v18 arena shutdown release",
     )
     _, manager_destructor_end = find_braced_region(
-        lines, manager_destructor, "v17 arena shutdown release"
+        lines, manager_destructor, "v18 arena shutdown release"
     )
     manager_free_resources = find_unique_line(
         lines,
         "freeResources();",
-        "v17 arena shutdown release",
+        "v18 arena shutdown release",
         start=manager_destructor,
         end=manager_destructor_end,
     )
     lines[manager_free_resources + 1:manager_free_resources + 1] = [
         "#ifdef N64_FT_ONLY",
-        "\tdelete[] ft64LargeSoundArena;",
-        "\tft64LargeSoundArena = NULL;",
-        "\tft64LargeSoundArenaCapacity = 0;",
         "\tft64LargeSoundArenaEverUsed = false;",
         "#endif",
     ]
@@ -791,15 +789,15 @@ def transform_resource(lines: list[str]) -> list[str]:
     large_sound_create = find_unique_line(
         lines,
         "byte *ResourceManager::createResource(ResType type, ResId idx, uint32 size) {",
-        "v17 large sound arena allocation",
+        "v18 large sound arena allocation",
     )
     _, large_sound_create_end = find_braced_region(
-        lines, large_sound_create, "v17 large sound arena allocation"
+        lines, large_sound_create, "v18 large sound arena allocation"
     )
     large_sound_expire = find_unique_line(
         lines,
         "expireResources(size);",
-        "v17 arena-aware resource expiry",
+        "v18 arena-aware resource expiry",
         start=large_sound_create,
         end=large_sound_create_end,
     )
@@ -817,33 +815,25 @@ def transform_resource(lines: list[str]) -> list[str]:
     large_sound_create = find_unique_line(
         lines,
         "byte *ResourceManager::createResource(ResType type, ResId idx, uint32 size) {",
-        "v17 large sound arena allocation boundary",
+        "v18 large sound arena allocation boundary",
     )
     _, large_sound_create_end = find_braced_region(
-        lines, large_sound_create, "v17 large sound arena allocation boundary"
+        lines, large_sound_create, "v18 large sound arena allocation boundary"
     )
     large_sound_alloc = find_unique_line(
         lines,
         "byte *ptr = new byte[size + SAFETY_AREA];",
-        "v17 large sound arena allocation",
+        "v18 large sound arena allocation",
         start=large_sound_create,
         end=large_sound_create_end,
     )
     lines[large_sound_alloc:large_sound_alloc + 1] = [
         "#ifdef N64_FT_ONLY",
-        "// FT64 r2v structural: v17 large sound arena allocation",
+        "// FT64 r2v structural: v18 large sound arena allocation",
         "\tbyte *ptr = NULL;",
         "\tif (ft64ArenaEligible) {",
         "\t\tconst uint32 ft64ArenaNeeded = size + SAFETY_AREA;",
-        "\t\tif (!ft64LargeSoundArena) {",
-        "\t\t\tuint32 ft64ArenaReserve = 0x1A4000;",
-        "\t\t\tif (ft64ArenaReserve < ft64ArenaNeeded)",
-        "\t\t\t\tft64ArenaReserve = ft64ArenaNeeded;",
-        "\t\t\tft64LargeSoundArena = new byte[ft64ArenaReserve];",
-        "\t\t\tif (ft64LargeSoundArena)",
-        "\t\t\t\tft64LargeSoundArenaCapacity = ft64ArenaReserve;",
-        "\t\t\t::ft64_diag_resource_event(ft64LargeSoundArena ? \"large-sound-arena-create\" : \"large-sound-arena-create-failed\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64LargeSoundArenaCapacity, -1);",
-        "\t\t}",
+        "\t\t::ft64_diag_resource_event(\"large-sound-arena-static\", nameOfResType(type), (int)type, (int)idx, size, size + SAFETY_AREA, _allocatedSize, _minHeapThreshold, _maxHeapThreshold, ft64LargeSoundArenaCapacity, -1);",
         "\t\tif (ft64LargeSoundArena && ft64ArenaNeeded <= ft64LargeSoundArenaCapacity) {",
         "\t\t\tint ft64ArenaOwner = -1;",
         "\t\t\tfor (uint ft64SoundId = 0; ft64SoundId < (uint)_types[rtSound].size(); ++ft64SoundId) {",
@@ -991,9 +981,9 @@ EXPECTED_MARKERS = {
         "resource no-candidate",
         "resource eviction",
         "resource expiration complete",
-        "v17 sound 633 transition reclaim",
-        "v17 reusable large sound arena",
-        "v17 large sound arena allocation",
+        "v18 sound 633 transition reclaim",
+        "v18 reusable large sound arena",
+        "v18 large sound arena allocation",
     ],
     "engines/scumm/script_v6.cpp": [
         "video opcode diagnostic bridge",
@@ -1058,18 +1048,18 @@ def verify_outputs(outputs: dict[str, list[str]]) -> None:
         (resource, "!ft64PreviousInUse && !ft64PreviousSound.isOffHeap()", "Sound 622 safe eviction gate"),
         (resource, "ft64PreviousSound.unlock();", "Sound 622 stale-lock release"),
         (resource, "nukeResource(rtSound, ft64PreviousSoundId);", "Sound 622 release"),
-        (resource, "static byte *ft64LargeSoundArena = NULL;", "large-sound arena storage"),
-        (resource, "static uint32 ft64LargeSoundArenaCapacity = 0;", "large-sound arena capacity"),
+        (resource, "static byte ft64LargeSoundArenaStorage[0x1A4000] __attribute__((aligned(16)));", "static large-sound arena storage"),
+        (resource, "static const uint32 ft64LargeSoundArenaCapacity = sizeof(ft64LargeSoundArenaStorage);", "static large-sound arena capacity"),
         (resource, "ft64IsLargeSoundArenaAddress", "arena ownership test"),
         (resource, "ft64ArenaCanReuse", "arena-aware expiry gate"),
-        (resource, '"large-sound-arena-create"', "arena creation event"),
+        (resource, '"large-sound-arena-static"', "static arena availability event"),
         (resource, '"large-sound-arena-use"', "arena first-use event"),
         (resource, '"large-sound-arena-reuse"', "arena reuse event"),
         (resource, '"large-sound-arena-busy"', "arena busy refusal event"),
         (resource, '"large-sound-heap-fallback"', "large-sound heap fallback event"),
         (resource, "if (!ft64IsLargeSoundArenaAddress(_address))", "arena-safe delete guard"),
-        (resource, "delete[] ft64LargeSoundArena;", "arena shutdown release"),
-        (resource, "ft64ArenaReserve = 0x1A4000;", "minimum arena reserve"),
+        (resource, "static byte *const ft64LargeSoundArena = ft64LargeSoundArenaStorage;", "static arena pointer"),
+        (resource, "size + SAFETY_AREA <= ft64LargeSoundArenaCapacity", "static arena capacity gate"),
         (resource, "_allocatedSize += size;", "original active-resource accounting"),
         (resource, "_allocatedSize -= _types[type][idx]._size;", "original resource release accounting"),
     ]

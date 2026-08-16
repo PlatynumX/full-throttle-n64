@@ -7,7 +7,7 @@ SRC="$ROOT/backend"
 DST="$SCUMMVM/backends/platform/n64libdragon"
 PATCH="$ROOT/upstream/scummvm-1.6.0-ft64.patch"
 SPECIALIZER="$ROOT/scripts/specialize_ft_only.py"
-VERIFIER="$ROOT/scripts/verify_v17_resource.py"
+VERIFIER="$ROOT/scripts/verify_v18_resource.py"
 ART="$ROOT/artifacts"
 PINNED_SCUMMVM="f75a652bb7c956f145abe881c87b5dbf5c9ec24b"
 
@@ -204,6 +204,9 @@ grep -q 'dir_findfirst' "$DST/n64libdragon-fs.cpp"
 
 # Prove the generated make graph contains the expected stripped GUI and FT
 # engine objects before spending CI time compiling them.
+if [ "${FT64_SKIP_MAKE_DB:-0}" = "1" ]; then
+    echo "[integrate] skipping libdragon make-database audit for source-only prepush validation"
+else
 make -C "$DST" -pn > "$ART/scummvm-make-database.txt" 2> "$ART/scummvm-make-database.stderr"
 gui_rule="$(awk '/^gui\/libgui\.a:/ { print; exit }' "$ART/scummvm-make-database.txt")"
 if [ -z "$gui_rule" ]; then
@@ -232,6 +235,7 @@ for required in \
         exit 1
     fi
 done
+fi
 
 git -C "$SCUMMVM" add -N backends/platform/n64libdragon
 git -C "$SCUMMVM" diff --check
