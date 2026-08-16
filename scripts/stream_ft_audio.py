@@ -463,8 +463,18 @@ void ImuseDigiSndMgr::prepareSoundFromFTStream(SoundDesc *sound) {
 
 		bool quit = false;
 		while (!quit) {
-			if (offset > sound->streamSize || sound->streamSize - offset < 4)
-				error("FT64 stream: Crea block outside sound %d", sound->soundId);
+			if (offset > sound->streamSize)
+				error("FT64 stream: Crea offset %u beyond sound %d size %u", offset, sound->soundId, sound->streamSize);
+			if (offset == sound->streamSize)
+				break;
+			if (sound->streamSize - offset < 4) {
+				byte terminator = 0xFF;
+				if (!file->seek(base + offset, SEEK_SET) || file->read(&terminator, 1) != 1)
+					error("FT64 stream: Crea tail read failed for sound %d", sound->soundId);
+				if (terminator == 0)
+					break;
+				error("FT64 stream: short Crea tail code %u remain %u for sound %d", (uint)terminator, sound->streamSize - offset, sound->soundId);
+			}
 			byte lenBytes[4];
 			if (!file->seek(base + offset, SEEK_SET) || file->read(lenBytes, 4) != 4)
 				error("FT64 stream: Crea block read failed for sound %d", sound->soundId);
