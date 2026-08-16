@@ -7,7 +7,7 @@ SRC="$ROOT/backend"
 DST="$SCUMMVM/backends/platform/n64libdragon"
 PATCH="$ROOT/upstream/scummvm-1.6.0-ft64.patch"
 SPECIALIZER="$ROOT/scripts/specialize_ft_only.py"
-VERIFIER="$ROOT/scripts/verify_v18_resource.py"
+STREAMER="$ROOT/scripts/stream_ft_audio.py"
 ART="$ROOT/artifacts"
 PINNED_SCUMMVM="f75a652bb7c956f145abe881c87b5dbf5c9ec24b"
 
@@ -41,6 +41,15 @@ for rel in \
     cp "$SCUMMVM/$rel" "$ART/pristine-source/$rel"
 done
 
+# Preserve the exact pristine files touched by v19 streaming.
+for rel in \
+    engines/scumm/scumm.h \
+    engines/scumm/sound.cpp \
+    engines/scumm/imuse_digi/dimuse_sndmgr.h \
+    engines/scumm/imuse_digi/dimuse_sndmgr.cpp; do
+    mkdir -p "$ART/pristine-source/$(dirname "$rel")"
+    cp "$SCUMMVM/$rel" "$ART/pristine-source/$rel"
+done
 # Focused source neighborhoods make a failed CI run useful instead of opaque.
 sed -n '1,120p;330,475p' "$SCUMMVM/base/main.cpp" > "$ART/base-main-before.txt"
 sed -n '1025,1120p' "$SCUMMVM/engines/scumm/detection.cpp" > "$ART/scumm-detection-before.txt"
@@ -77,6 +86,11 @@ python3 "$SPECIALIZER" --check "$SCUMMVM"
 echo "[integrate] applying structural Full Throttle-only source specialization"
 python3 "$SPECIALIZER" --apply "$SCUMMVM"
 python3 "$SPECIALIZER" --verify "$SCUMMVM"
+echo "[integrate] checking large Full Throttle iMUS streaming specialization"
+python3 "$STREAMER" --check "$SCUMMVM"
+echo "[integrate] applying large Full Throttle iMUS streaming specialization"
+python3 "$STREAMER" --apply "$SCUMMVM"
+python3 "$STREAMER" --verify "$SCUMMVM"
 git -C "$SCUMMVM" diff --check
 
 # Verify source-level results, not merely a zero exit code.
@@ -107,7 +121,6 @@ grep -Fq '_costumeRenderer = new AkosRenderer(this);' "$SCUMMVM/engines/scumm/sc
 grep -Fq '_sound->_musicType = MDT_NONE;' "$SCUMMVM/engines/scumm/scumm.cpp"
 grep -Fq 'ft64_diag_resource_event' "$SCUMMVM/engines/scumm/resource.cpp"
 grep -Fq '"post-expire"' "$SCUMMVM/engines/scumm/resource.cpp"
-python3 "$VERIFIER" "$SCUMMVM/engines/scumm/resource.cpp"
 grep -Fq 'ft64_diag_video_opcode' "$SCUMMVM/engines/scumm/script_v6.cpp"
 grep -Fq 'vm.slot[_currentScript].number' "$SCUMMVM/engines/scumm/script_v6.cpp"
 grep -Fq '#ifndef N64_FT_ONLY' "$SCUMMVM/base/main.cpp"
@@ -147,6 +160,33 @@ sed -n '20,60p;2378,2445p' "$SCUMMVM/engines/scumm/script_v6.cpp" > "$ART/scumm-
 grep -n 'FT64 r2v structural: resource' "$SCUMMVM/engines/scumm/resource.cpp" > "$ART/resource-diagnostic-markers.txt"
 grep -n 'FT64 r2v structural: .*opcode diagnostic' "$SCUMMVM/engines/scumm/script_v6.cpp" > "$ART/video-opcode-diagnostic-markers.txt"
 
+# Preserve and prove the v19 generated streaming source.
+for rel in \
+    engines/scumm/scumm.h \
+    engines/scumm/sound.cpp \
+    engines/scumm/imuse_digi/dimuse_sndmgr.h \
+    engines/scumm/imuse_digi/dimuse_sndmgr.cpp; do
+    mkdir -p "$ART/patched-source/$(dirname "$rel")"
+    cp "$SCUMMVM/$rel" "$ART/patched-source/$rel"
+done
+grep -n 'FT64 r2v structural: v19 large iMUS streaming' \
+    "$SCUMMVM/engines/scumm/scumm.h" \
+    "$SCUMMVM/engines/scumm/sound.cpp" \
+    "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.h" \
+    "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp" \
+    > "$ART/v19-streaming-markers.txt"
+grep -Fq 'openFTLargeSoundStream' "$SCUMMVM/engines/scumm/sound.cpp"
+grep -Fq 'prepareSoundFromFTStream' "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
+grep -Fq '"stream-open"' "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
+grep -Fq '"stream-close"' "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
+if grep -Fq 'ft64LargeSoundArena' "$SCUMMVM/engines/scumm/resource.cpp"; then
+    echo 'arena code leaked into v19 generated resource.cpp' >&2
+    exit 1
+fi
+if grep -Fq 'sound-633-stop' "$SCUMMVM/engines/scumm/resource.cpp"; then
+    echo 'forced Sound-633 recovery leaked into v19 generated resource.cpp' >&2
+    exit 1
+fi
 # Install the hardware-proven libdragon backend as complete source files.
 rm -rf "$DST"
 mkdir -p "$DST"
@@ -207,6 +247,9 @@ grep -q 'dir_findfirst' "$DST/n64libdragon-fs.cpp"
 if [ "${FT64_SKIP_MAKE_DB:-0}" = "1" ]; then
     echo "[integrate] skipping libdragon make-database audit for source-only prepush validation"
 else
+if [ "${FT64_SKIP_MAKE_DB:-0}" = "1" ]; then
+    echo "[integrate] skipping libdragon make-database audit for source-only Termux validation"
+else
 make -C "$DST" -pn > "$ART/scummvm-make-database.txt" 2> "$ART/scummvm-make-database.stderr"
 gui_rule="$(awk '/^gui\/libgui\.a:/ { print; exit }' "$ART/scummvm-make-database.txt")"
 if [ -z "$gui_rule" ]; then
@@ -229,12 +272,14 @@ for required in \
     engines/scumm/insane/insane.o \
     engines/scumm/resource.o \
     engines/scumm/smush/smush_player.o \
-    engines/scumm/imuse_digi/dimuse.o; do
+    engines/scumm/imuse_digi/dimuse.o \
+    engines/scumm/imuse_digi/dimuse_sndmgr.o; do
     if [[ "$scumm_rule" != *"$required"* ]]; then
         echo "Full Throttle required object missing from SCUMM module: $required" >&2
         exit 1
     fi
 done
+fi
 fi
 
 git -C "$SCUMMVM" add -N backends/platform/n64libdragon
