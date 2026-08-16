@@ -119,8 +119,8 @@ void N64LibdragonFilesystemNode::setFlags() {
 bool N64LibdragonFilesystemNode::isWritable() const {
     // The mounted SummerCart FAT filesystem supports file create/write in
     // existing directories. Directory creation itself is not exposed by the
-    // pinned libdragon FAT adapter, so sd:/fullthrottle/saves must already
-    // exist on the user's card.
+    // pinned libdragon FAT adapter, so FT64 stores save files directly in the
+    // guaranteed-existing sd:/fullthrottle directory.
     return _path.hasPrefix("sd:/");
 }
 

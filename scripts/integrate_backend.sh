@@ -176,7 +176,7 @@ grep -n "FT64 r2v structural: v20 universal FT audio streaming" \
     "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp" \
     > "$ART/v20-streaming-markers.txt"
 grep -Fq "_fileHandle->getName()" "$SCUMMVM/engines/scumm/sound.cpp"
-grep -Fq "kFT64StreamCacheSize = 16384" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
+grep -Fq "kFT64StreamCacheSize = 32768" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
 grep -Fq "MKTAG('C','r','e','a')" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
 grep -Fq "\"stream-open\"" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
 grep -Fq "\"stream-open-failed\"" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
