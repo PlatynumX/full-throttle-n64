@@ -186,6 +186,15 @@ grep -Fq 'STREAMER="$ROOT/scripts/stream_ft_audio.py"' scripts/integrate_backend
 grep -Fq 'python3 "$STREAMER" --check "$SCUMMVM"' scripts/integrate_backend.sh
 grep -Fq 'python3 "$STREAMER" --apply "$SCUMMVM"' scripts/integrate_backend.sh
 grep -Fq 'python3 "$STREAMER" --verify "$SCUMMVM"' scripts/integrate_backend.sh
+test -f scripts/stream_ft_audio_handles.py
+python3 -m py_compile scripts/stream_ft_audio_handles.py
+grep -Fq 'streamCacheCapacity' scripts/stream_ft_audio_handles.py
+grep -Fq '"stream-prefill"' scripts/stream_ft_audio_handles.py
+grep -Fq '"stream-reopen"' scripts/stream_ft_audio_handles.py
+grep -Fq 'HANDLE_STREAMER="$ROOT/scripts/stream_ft_audio_handles.py"' scripts/integrate_backend.sh
+grep -Fq 'python3 "$HANDLE_STREAMER" --check "$SCUMMVM"' scripts/integrate_backend.sh
+grep -Fq 'python3 "$HANDLE_STREAMER" --apply "$SCUMMVM"' scripts/integrate_backend.sh
+grep -Fq 'python3 "$HANDLE_STREAMER" --verify "$SCUMMVM"' scripts/integrate_backend.sh
 if grep -Eq 'ft64LargeSoundArena|sound-633-stop' scripts/specialize_ft_only.py; then
     echo "arena/forced Sound-633 code remains in v20 specializer" >&2
     exit 1

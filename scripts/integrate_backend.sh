@@ -8,6 +8,7 @@ DST="$SCUMMVM/backends/platform/n64libdragon"
 PATCH="$ROOT/upstream/scummvm-1.6.0-ft64.patch"
 SPECIALIZER="$ROOT/scripts/specialize_ft_only.py"
 STREAMER="$ROOT/scripts/stream_ft_audio.py"
+HANDLE_STREAMER="$ROOT/scripts/stream_ft_audio_handles.py"
 ART="$ROOT/artifacts"
 PINNED_SCUMMVM="f75a652bb7c956f145abe881c87b5dbf5c9ec24b"
 
@@ -91,6 +92,11 @@ python3 "$STREAMER" --check "$SCUMMVM"
 echo "[integrate] applying v20 universal Full Throttle audio streaming"
 python3 "$STREAMER" --apply "$SCUMMVM"
 python3 "$STREAMER" --verify "$SCUMMVM"
+echo "[integrate] checking r2aa no-persistent-handle audio layer"
+python3 "$HANDLE_STREAMER" --check "$SCUMMVM"
+echo "[integrate] applying r2aa no-persistent-handle audio layer"
+python3 "$HANDLE_STREAMER" --apply "$SCUMMVM"
+python3 "$HANDLE_STREAMER" --verify "$SCUMMVM"
 git -C "$SCUMMVM" diff --check
 
 # Verify source-level results, not merely a zero exit code.
@@ -180,6 +186,10 @@ grep -Fq "kFT64StreamCacheSize = 32768" "$SCUMMVM/engines/scumm/imuse_digi/dimus
 grep -Fq "MKTAG('C','r','e','a')" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
 grep -Fq "\"stream-open\"" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
 grep -Fq "\"stream-open-failed\"" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
+grep -Fq "streamCacheCapacity" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
+grep -Fq "\"stream-prefill\"" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
+grep -Fq "\"stream-reopen\"" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
+grep -Fq "sound->streamFile = NULL;" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"
 if grep -Eq "ft64LargeSoundArena|sound-633-stop|size >= 512 [*] 1024|fullSize < 512 [*] 1024" "$SCUMMVM/engines/scumm/resource.cpp" "$SCUMMVM/engines/scumm/sound.cpp" "$SCUMMVM/engines/scumm/imuse_digi/dimuse_sndmgr.cpp"; then
     echo "legacy arena/threshold recovery leaked into v20 generated source" >&2
     exit 1
