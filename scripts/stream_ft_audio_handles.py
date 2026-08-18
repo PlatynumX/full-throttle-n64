@@ -168,12 +168,18 @@ def apply(root):
         "sound->streamFile = ft64Stream;",
         "openSound streamFile assignment",
     )
-    ret = find_unique(
-        lines,
-        "return sound;",
-        "streamed openSound return",
-        start + 1,
-    )
+    # The containing openSound() has multiple legitimate `return sound;`
+    # statements for different resource paths.  The streamed FT branch is
+    # the FIRST return after the unique `sound->streamFile = ft64Stream;`
+    # assignment, so select that nearest return and validate the bounded
+    # region below before replacing anything.
+    ret_candidates = [
+        i for i in range(start + 1, min(start + 160, len(lines)))
+        if lines[i].strip() == "return sound;"
+    ]
+    if not ret_candidates:
+        raise PatchError("streamed openSound return: no return sound; found after stream assignment")
+    ret = ret_candidates[0]
 
     indent = lines[start][: len(lines[start]) - len(lines[start].lstrip())]
     t = indent
