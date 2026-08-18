@@ -246,11 +246,18 @@ def apply(root):
         "void ImuseDigiSndMgr::closeSound(SoundDesc *soundDesc) {",
         "closeSound signature",
     )
+    close_end = find_unique(
+        lines,
+        "ImuseDigiSndMgr::SoundDesc *ImuseDigiSndMgr::cloneSound(SoundDesc *soundDesc) {",
+        "closeSound boundary",
+        close_sig + 1,
+    )
     compressed = find_unique(
         lines,
         "delete soundDesc->compressedStream;",
         "closeSound compressed delete",
         close_sig + 1,
+        close_end,
     )
     if_idx = find_unique(
         lines,
